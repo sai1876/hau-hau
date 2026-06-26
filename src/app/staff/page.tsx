@@ -11,6 +11,8 @@ import ProfileSection from '@/components/ProfileSection';
 import TokenAccountForm from '@/components/TokenAccountForm';
 import { TokenAccount } from '@/types';
 import { TokenIcon } from '@/components/TokenIcon';
+import { ForkKnife, CreditCard, ClipboardText, MagnifyingGlass, GearSix } from '@phosphor-icons/react';
+import { Pagination } from '@/components/Pagination';
 
 export default function StaffDashboardPage() {
   const router = useRouter();
@@ -31,6 +33,8 @@ export default function StaffDashboardPage() {
   const [isIssuingNewCard, setIsIssuingNewCard] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PER_PAGE = 8;
 
   // Token Hub states
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
@@ -64,9 +68,14 @@ export default function StaffDashboardPage() {
     activeCategory === 'All' ? true : item.category === activeCategory
   );
 
-  // Filter orders created by this staff
-  const staffOrders = orders
-    .filter(order => order.staffId === currentUser.username);
+  // Filter orders created by this staff — sorted newest first
+  const staffOrders = [...orders]
+    .filter(order => order.staffId === currentUser.username)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const historyPageCount = Math.max(1, Math.ceil(staffOrders.length / HISTORY_PER_PAGE));
+  const safeHistoryPage  = Math.min(historyPage, historyPageCount);
+  const pagedHistory     = staffOrders.slice((safeHistoryPage - 1) * HISTORY_PER_PAGE, safeHistoryPage * HISTORY_PER_PAGE);
 
   // Mobile cart metadata
   const currentCart = activeTable ? tableCarts[activeTable] || [] : [];
@@ -182,8 +191,8 @@ export default function StaffDashboardPage() {
               <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
                 {currentUser.name}
               </span>
-              <span className="text-[10px] text-text-muted font-bold mt-0.5 block">
-                Floor Staff <span className="text-xs text-text-muted/60 ml-0.5">⚙</span>
+              <span className="text-[10px] text-text-muted font-bold mt-0.5 flex items-center gap-1">
+                Floor Staff <GearSix size={12} weight="duotone" className="inline text-text-muted/60 ml-0.5" />
               </span>
             </button>
             <button
@@ -213,15 +222,15 @@ export default function StaffDashboardPage() {
                   setStudentSearchQuery('');
                   setIsIssuingNewCard(false);
                 }}
-                className={`px-6 py-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap border-b-2 -mb-[2px] flex items-center gap-2 ${
+                className={`px-6 py-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap border-b-2 mb-[-2px] flex items-center gap-2 ${
                   isSelected
                     ? 'border-primary bg-surface/50 text-foreground font-bold'
                     : 'border-transparent text-text-muted hover:text-foreground hover:bg-surface/20'
                 }`}
               >
-                {space === 'pos' && <span>🍽️ Order</span>}
-                {space === 'tokens' && <span>💳 Cards</span>}
-                {space === 'history' && <span>📋 History</span>}
+                {space === 'pos' && <><ForkKnife size={16} weight="duotone" /><span>Order</span></>}
+                {space === 'tokens' && <><CreditCard size={16} weight="duotone" /><span>Cards</span></>}
+                {space === 'history' && <><ClipboardText size={16} weight="duotone" /><span>History</span></>}
               </button>
             );
           })}
@@ -247,11 +256,11 @@ export default function StaffDashboardPage() {
                       const getCategoryLabel = (name: string) => {
                         const lower = name.toLowerCase();
                         if (lower === 'all') return 'All';
-                        if (lower.includes('burger')) return '🍔 Burgers';
-                        if (lower.includes('snack') || lower.includes('side')) return '🍟 Snacks';
-                        if (lower.includes('drink') || lower.includes('beverage')) return '🥤 Drinks';
-                        if (lower.includes('combo')) return '🍱 Combos';
-                        return `🍽️ ${name}`;
+                        if (lower.includes('burger')) return 'Burgers';
+                        if (lower.includes('snack') || lower.includes('side')) return 'Snacks';
+                        if (lower.includes('drink') || lower.includes('beverage')) return 'Drinks';
+                        if (lower.includes('combo')) return 'Combos';
+                        return name;
                       };
                       return (
                         <button
@@ -357,7 +366,7 @@ export default function StaffDashboardPage() {
                       onChange={(e) => handleStudentSearch(e.target.value)}
                       className="minimal-input pl-10 pr-4 py-3 text-xs text-white placeholder-text-muted/50 w-full font-semibold"
                     />
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold select-none pointer-events-none">🔍</span>
+                    <MagnifyingGlass size={16} weight="duotone" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
                     
                     {/* Autocomplete Results Dropdown */}
                     {studentSearchQuery && searchedStudents.length > 0 && (
@@ -562,7 +571,9 @@ export default function StaffDashboardPage() {
                   <div className="flex flex-col gap-4">
                     {!isIssuingNewCard ? (
                       <div className="minimal-card p-6 rounded-xl bg-surface border border-border flex flex-col items-center justify-center text-center gap-3">
-                        <span className="text-xl">💳</span>
+                        <div className="w-12 h-12 rounded-full bg-surface-container border border-border flex items-center justify-center">
+                          <CreditCard size={20} weight="duotone" className="text-primary" />
+                        </div>
                         <div>
                           <h4 className="text-xs font-bold text-foreground">Need a new card?</h4>
                           <p className="text-[10px] text-text-muted mt-1">Register a student and issue a physical loyalty card pass.</p>
@@ -632,7 +643,7 @@ export default function StaffDashboardPage() {
                   <p className="text-xs text-text-muted mt-0.5">Recent orders fulfilled or pending during this shift</p>
                 </div>
                 <span className="text-xs font-mono text-text-muted font-bold bg-surface-header border border-border px-3 py-1 rounded-lg">
-                  Total Orders: {staffOrders.length}
+                  Total: {staffOrders.length}
                 </span>
               </div>
               
@@ -642,7 +653,7 @@ export default function StaffDashboardPage() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {[...staffOrders].reverse().map((order) => (
+                  {pagedHistory.map((order) => (
                     <div 
                       key={order.id} 
                       className="bg-surface-container/20 border border-border px-4 py-3.5 rounded-lg flex items-center justify-between text-xs hover:border-text-muted/30 transition-colors"
@@ -667,6 +678,19 @@ export default function StaffDashboardPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {staffOrders.length > HISTORY_PER_PAGE && (
+                <div className="-mx-6 mt-4 border-t border-border">
+                  <Pagination
+                    currentPage={safeHistoryPage}
+                    totalPages={historyPageCount}
+                    onPageChange={setHistoryPage}
+                    totalItems={staffOrders.length}
+                    itemsPerPage={HISTORY_PER_PAGE}
+                    label="orders"
+                  />
                 </div>
               )}
             </div>

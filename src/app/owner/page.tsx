@@ -13,6 +13,21 @@ import TokenAccountForm from '@/components/TokenAccountForm';
 import ProfileSection from '@/components/ProfileSection';
 import { Order, MenuItem, TokenAccount, StaffAccount } from '@/types';
 import { TokenIcon } from '@/components/TokenIcon';
+import { Pagination } from '@/components/Pagination';
+import {
+  SquaresFour,
+  ClipboardText,
+  ForkKnife,
+  Users,
+  CreditCard,
+  UserCircle,
+  SignOut,
+  UsersThree,
+  Fire,
+  Leaf,
+  Star,
+  X,
+} from '@phosphor-icons/react';
 
 export default function OwnerDashboardPage() {
   const router = useRouter();
@@ -42,6 +57,12 @@ export default function OwnerDashboardPage() {
   const [historyToken, setHistoryToken] = useState<TokenAccount | null>(null);
   const [selectedStaffDetail, setSelectedStaffDetail] = useState<StaffAccount | null>(null);
   const [editingLimitValue, setEditingLimitValue] = useState<string>('');
+
+  // Pagination state
+  const ORDERS_PER_PAGE = 10;
+  const MENU_PER_PAGE   = 10;
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [menuPage,   setMenuPage]   = useState(1);
 
   // Form state for creating menu item
   const [itemName, setItemName] = useState('');
@@ -102,11 +123,18 @@ export default function OwnerDashboardPage() {
   const totalCollections = cashCollection + onlineCollection + tokenCollection;
 
   // Filter orders by active sub-tab AND active payment mode filter
-  const filteredOrders = orders.filter(order => {
+  // Sort newest-first then apply status/payment filters
+  const sortedOrders = [...orders].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  const filteredOrders = sortedOrders.filter((order) => {
     const matchesStatus = activeOrderTab === 'all' ? true : order.orderStatus === activeOrderTab;
     const matchesPayment = paymentModeFilter === 'all' ? true : order.paymentMode === paymentModeFilter;
     return matchesStatus && matchesPayment;
   });
+  const ordersPageCount  = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+  const safeOrdersPage   = Math.min(ordersPage, ordersPageCount);
+  const pagedOrders      = filteredOrders.slice((safeOrdersPage - 1) * ORDERS_PER_PAGE, safeOrdersPage * ORDERS_PER_PAGE);
 
   // Top Selling Items calculations
   const itemSalesMap: Record<string, { name: string; quantity: number; total: number }> = {};
@@ -125,8 +153,14 @@ export default function OwnerDashboardPage() {
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 5);
 
-  // Active staff list
-  const activeStaffList = staffList.filter(s => s.status === 'active');
+  // Active staff list — limit to 5 for overview
+  const activeStaffList    = staffList.filter(s => s.status === 'active');
+  const activeStaffPreview = activeStaffList.slice(0, 5);
+
+  // Menu pagination
+  const menuPageCount = Math.max(1, Math.ceil(menu.length / MENU_PER_PAGE));
+  const safeMenuPage  = Math.min(menuPage, menuPageCount);
+  const pagedMenu     = menu.slice((safeMenuPage - 1) * MENU_PER_PAGE, safeMenuPage * MENU_PER_PAGE);
 
   const handleCancelOrder = (orderId: string) => {
     confirmAction(
@@ -266,7 +300,7 @@ export default function OwnerDashboardPage() {
         </div>
 
         {/* Stacked distribution bar */}
-        <div className="h-5 w-full bg-surface-container rounded-full overflow-hidden flex border border-border p-[1px] shadow-inner relative z-10">
+        <div className="h-5 w-full bg-surface-container rounded-full overflow-hidden flex border border-border p-px shadow-inner relative z-10">
           {cashCollection > 0 && (
             <button 
               type="button"
@@ -415,25 +449,34 @@ export default function OwnerDashboardPage() {
       <nav className="md:hidden flex overflow-x-auto border-b border-border bg-surface-header/40 p-2 shrink-0 gap-1.5">
         {(['overview', 'orders', 'menu', 'staff', 'tokens', 'profile'] as const).map((space) => {
           const isSelected = activeWorkspace === space;
-          const labels: Record<string, string> = {
-            overview: '📊 Overview',
-            orders: '📋 Orders',
-            menu: '🍔 Menu',
-            staff: '👥 Staff',
-            tokens: '💳 Tokens',
-            profile: '👤 Profile'
+          const mobileIcons: Record<string, React.ReactNode> = {
+            overview: <SquaresFour  size={15} weight="duotone" />,
+            orders:   <ClipboardText size={15} weight="duotone" />,
+            menu:     <ForkKnife    size={15} weight="duotone" />,
+            staff:    <Users        size={15} weight="duotone" />,
+            tokens:   <CreditCard   size={15} weight="duotone" />,
+            profile:  <UserCircle   size={15} weight="duotone" />,
+          };
+          const mobileLabels: Record<string, string> = {
+            overview: 'Overview',
+            orders: 'Orders',
+            menu: 'Menu',
+            staff: 'Staff',
+            tokens: 'Tokens',
+            profile: 'Profile'
           };
           return (
             <button
               key={space}
               onClick={() => setActiveWorkspace(space)}
-              className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 isSelected
                   ? 'bg-primary text-white font-bold'
                   : 'text-text-muted hover:text-foreground hover:bg-surface-container/50'
               }`}
             >
-              {labels[space]}
+              {mobileIcons[space]}
+              {mobileLabels[space]}
             </button>
           );
         })}
@@ -458,13 +501,13 @@ export default function OwnerDashboardPage() {
             <nav className="flex flex-col gap-1.5">
               {(['overview', 'orders', 'menu', 'staff', 'tokens', 'profile'] as const).map((space) => {
                 const isSelected = activeWorkspace === space;
-                const labels: Record<string, { icon: string; text: string }> = {
-                  overview: { icon: '📊', text: 'Overview' },
-                  orders: { icon: '📋', text: 'Orders' },
-                  menu: { icon: '🍔', text: 'Menu' },
-                  staff: { icon: '👥', text: 'Staff' },
-                  tokens: { icon: '💳', text: 'Token Cards' },
-                  profile: { icon: '👤', text: 'Profile & Settings' }
+                const sidebarLabels: Record<string, { icon: React.ReactNode; text: string }> = {
+                  overview: { icon: <SquaresFour  size={17} weight="duotone" />, text: 'Overview' },
+                  orders:   { icon: <ClipboardText size={17} weight="duotone" />, text: 'Orders' },
+                  menu:     { icon: <ForkKnife    size={17} weight="duotone" />, text: 'Menu' },
+                  staff:    { icon: <Users        size={17} weight="duotone" />, text: 'Staff' },
+                  tokens:   { icon: <CreditCard   size={17} weight="duotone" />, text: 'Token Cards' },
+                  profile:  { icon: <UserCircle   size={17} weight="duotone" />, text: 'Profile & Settings' },
                 };
                 return (
                   <button
@@ -476,9 +519,9 @@ export default function OwnerDashboardPage() {
                         : 'text-text-muted hover:text-foreground hover:bg-surface-container/50'
                     }`}
                   >
-                    <span className="text-base shrink-0 w-5 text-center">{labels[space].icon}</span>
+                    <span className="shrink-0 w-5 flex items-center justify-center">{sidebarLabels[space].icon}</span>
                     <span className="hidden group-hover:inline-block whitespace-nowrap overflow-hidden">
-                      {labels[space].text}
+                      {sidebarLabels[space].text}
                     </span>
                   </button>
                 );
@@ -501,7 +544,7 @@ export default function OwnerDashboardPage() {
               onClick={logout}
               className="minimal-btn-secondary w-full h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all flex items-center justify-center group-hover:justify-start px-2 group-hover:px-3.5 gap-0 group-hover:gap-3"
             >
-              <span className="text-base shrink-0 w-5 text-center">🚪</span>
+                            <span className="shrink-0 w-5 flex items-center justify-center"><SignOut size={17} weight="duotone" /></span>
               <span className="hidden group-hover:inline-block whitespace-nowrap overflow-hidden">
                 Log Out
               </span>
@@ -575,7 +618,7 @@ export default function OwnerDashboardPage() {
                 {/* Top selling items */}
                 <div className="minimal-card p-5 rounded-xl bg-surface border border-border flex flex-col gap-4">
                   <h3 className="text-xs text-foreground font-bold uppercase tracking-wider flex items-center gap-2">
-                    <span>🍔</span> Top Selling Items (Today)
+                    <ForkKnife size={14} weight="duotone" className="text-primary" /> Top Selling Items (Today)
                   </h3>
                   <div className="flex flex-col gap-2">
                     {topSellingItems.length === 0 ? (
@@ -600,13 +643,13 @@ export default function OwnerDashboardPage() {
                 {/* Active operators */}
                 <div className="minimal-card p-5 rounded-xl bg-surface border border-border flex flex-col gap-4">
                   <h3 className="text-xs text-foreground font-bold uppercase tracking-wider flex items-center gap-2">
-                    <span>👥</span> Active Staff Operators
+                    <UsersThree size={14} weight="duotone" className="text-primary" /> Active Staff Operators
                   </h3>
                   <div className="flex flex-col gap-2">
                     {activeStaffList.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-text-muted font-medium">No active staff accounts</div>
+                      <p className="text-xs text-text-muted font-semibold text-center py-4">No active staff right now</p>
                     ) : (
-                      activeStaffList.map((staff) => {
+                      activeStaffPreview.map((staff) => {
                         const staffOrdersCount = orders.filter(o => o.staffId === staff.username).length;
                         return (
                           <div key={staff.id} className="flex items-center justify-between p-3 bg-surface-container/20 border border-border rounded-lg text-xs">
@@ -670,8 +713,11 @@ export default function OwnerDashboardPage() {
                       return (
                         <button
                           key={tab}
-                          onClick={() => setActiveOrderTab(tab)}
-                          className={`px-6 py-3 text-xs font-semibold transition-all cursor-pointer border-b-2 -mb-[2px] flex items-center gap-2 ${
+                          onClick={() => {
+                          setActiveOrderTab(tab);
+                          setOrdersPage(1); // reset on tab change
+                        }}
+                          className={`px-6 py-3 text-xs font-semibold transition-all cursor-pointer border-b-2 mb-[-2px] flex items-center gap-2 ${
                             isSelected
                               ? 'border-primary bg-surface/50 text-foreground font-bold'
                               : 'border-transparent text-text-muted hover:text-foreground hover:bg-surface/20'
@@ -708,7 +754,7 @@ export default function OwnerDashboardPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border bg-surface-container/10">
-                          {filteredOrders.map((order) => (
+                          {pagedOrders.map((order) => (
                             <tr 
                               key={order.id} 
                               onClick={() => setSelectedOrder(order)}
@@ -764,6 +810,14 @@ export default function OwnerDashboardPage() {
                       </table>
                     </div>
                   )}
+                  <Pagination
+                    currentPage={safeOrdersPage}
+                    totalPages={ordersPageCount}
+                    onPageChange={setOrdersPage}
+                    totalItems={filteredOrders.length}
+                    itemsPerPage={ORDERS_PER_PAGE}
+                    label="orders"
+                  />
                 </div>
               </div>
             </div>
@@ -804,7 +858,7 @@ export default function OwnerDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border bg-surface-container/10">
-                      {menu.map((item) => (
+                      {pagedMenu.map((item) => (
                         <tr key={item.id} className="hover:bg-surface-container/20 transition-colors">
                           <td className="p-3.5 pl-5">
                             <div className="flex flex-col gap-0.5">
@@ -856,6 +910,14 @@ export default function OwnerDashboardPage() {
                     </tbody>
                   </table>
                 </div>
+                <Pagination
+                  currentPage={safeMenuPage}
+                  totalPages={menuPageCount}
+                  onPageChange={setMenuPage}
+                  totalItems={menu.length}
+                  itemsPerPage={MENU_PER_PAGE}
+                  label="items"
+                />
               </div>
             </div>
           )}
@@ -907,7 +969,9 @@ export default function OwnerDashboardPage() {
                 <div className="p-4">
                   {staffList.length === 0 ? (
                     <div className="p-8 text-center text-xs text-text-muted font-bold flex flex-col items-center gap-2">
-                      <span className="text-2xl opacity-35">👥</span>
+                      <div className="w-10 h-10 rounded-full bg-surface-container border border-border flex items-center justify-center opacity-40">
+                        <UsersThree size={20} weight="duotone" />
+                      </div>
                       <span>No staff accounts registered</span>
                     </div>
                   ) : (
@@ -1039,7 +1103,7 @@ export default function OwnerDashboardPage() {
                 onClick={() => setIsAddingMenuItem(false)}
                 className="text-[11px] text-text-muted hover:text-foreground font-bold transition-colors cursor-pointer"
               >
-                ✕ Close
+                                <X size={14} weight="bold" /> Close
               </button>
             </div>
             
@@ -1138,7 +1202,8 @@ export default function OwnerDashboardPage() {
                         onChange={(e) => setItemTags(prev => ({ ...prev, spicy: e.target.checked }))}
                         className="accent-primary cursor-pointer"
                       />
-                      <span>🔥 Spicy Item</span>
+                      <Fire size={14} weight="duotone" className="text-orange-400" />
+                      <span>Spicy Item</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer font-semibold text-text-muted">
                       <input
@@ -1147,7 +1212,8 @@ export default function OwnerDashboardPage() {
                         onChange={(e) => setItemTags(prev => ({ ...prev, veg: e.target.checked }))}
                         className="accent-success cursor-pointer"
                       />
-                      <span>🌱 Vegetarian Item</span>
+                      <Leaf size={14} weight="duotone" className="text-green-400" />
+                      <span>Vegetarian Item</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer font-semibold text-text-muted">
                       <input
@@ -1156,7 +1222,8 @@ export default function OwnerDashboardPage() {
                         onChange={(e) => setItemTags(prev => ({ ...prev, popular: e.target.checked }))}
                         className="accent-primary cursor-pointer"
                       />
-                      <span>⭐ Best Seller / Popular</span>
+                      <Star size={14} weight="duotone" className="text-yellow-400" />
+                      <span>Best Seller / Popular</span>
                     </label>
                   </div>
                 </div>
@@ -1336,7 +1403,7 @@ export default function OwnerDashboardPage() {
                 onClick={() => setEditingItem(null)}
                 className="text-[11px] text-text-muted hover:text-foreground font-bold transition-colors cursor-pointer"
               >
-                ✕ Close
+                                <X size={14} weight="bold" /> Close
               </button>
             </div>
 
@@ -1429,7 +1496,8 @@ export default function OwnerDashboardPage() {
                         onChange={(e) => setEditTags(prev => ({ ...prev, spicy: e.target.checked }))}
                         className="accent-primary cursor-pointer"
                       />
-                      <span>🔥 Spicy Item</span>
+                      <Fire size={14} weight="duotone" className="text-orange-400" />
+                      <span>Spicy Item</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer font-semibold text-text-muted">
                       <input
@@ -1438,7 +1506,8 @@ export default function OwnerDashboardPage() {
                         onChange={(e) => setEditTags(prev => ({ ...prev, veg: e.target.checked }))}
                         className="accent-success cursor-pointer"
                       />
-                      <span>🌱 Vegetarian Item</span>
+                      <Leaf size={14} weight="duotone" className="text-green-400" />
+                      <span>Vegetarian Item</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer font-semibold text-text-muted">
                       <input
@@ -1447,7 +1516,8 @@ export default function OwnerDashboardPage() {
                         onChange={(e) => setEditTags(prev => ({ ...prev, popular: e.target.checked }))}
                         className="accent-primary cursor-pointer"
                       />
-                      <span>⭐ Best Seller / Popular</span>
+                      <Star size={14} weight="duotone" className="text-yellow-400" />
+                      <span>Best Seller / Popular</span>
                     </label>
                   </div>
                 </div>
@@ -1489,7 +1559,7 @@ export default function OwnerDashboardPage() {
                 onClick={() => setHistoryToken(null)}
                 className="text-[11px] text-text-muted hover:text-foreground font-bold transition-colors cursor-pointer"
               >
-                ✕ Close
+                                <X size={14} weight="bold" /> Close
               </button>
             </div>
 
