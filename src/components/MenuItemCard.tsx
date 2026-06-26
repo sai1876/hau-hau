@@ -1,6 +1,7 @@
 import React from 'react';
 import { MenuItem } from '../types';
 import { useApp } from '../context/AppContext';
+import { Clock, Sparkle, TrendUp, Leaf, Fire } from '@phosphor-icons/react';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -29,29 +30,33 @@ export function MenuItemCard({ item }: MenuItemCardProps) {
   const renderBadge = () => {
     const priorityTag = getPriorityTag();
     if (!priorityTag) return null;
-    
-    let tagStyle = '';
-    let label = '';
-    
-    if (priorityTag === 'new') {
-      tagStyle = 'bg-primary/15 text-primary border border-primary/25';
-      label = '✨ New';
-    } else if (priorityTag === 'popular') {
-      tagStyle = 'bg-primary/15 text-primary border border-primary/25';
-      label = '⭐ Bestseller';
-    } else if (priorityTag === 'veg') {
-      tagStyle = 'bg-[#1b3821] text-[#71d384] border border-[#2e7d32]/25';
-      label = '🌱 Veg';
-    } else if (priorityTag === 'spicy') {
-      tagStyle = 'bg-[#3d1a16] text-[#f39c90] border border-[#c0392b]/25';
-      label = '🌶️ Spicy';
-    }
 
-    return (
-      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${tagStyle} shrink-0`}>
-        {label}
-      </span>
-    );
+    if (priorityTag === 'new') {
+      return (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-primary/15 text-primary border-primary/25 shrink-0 flex items-center gap-1">
+          <Sparkle size={11} weight="duotone" /> New
+        </span>
+      );
+    } else if (priorityTag === 'popular') {
+      return (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-primary/15 text-primary border-primary/25 shrink-0 flex items-center gap-1">
+          <TrendUp size={11} weight="duotone" /> Bestseller
+        </span>
+      );
+    } else if (priorityTag === 'veg') {
+      return (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-[#1b3821] text-[#71d384] border-[#2e7d32]/25 shrink-0 flex items-center gap-1">
+          <Leaf size={11} weight="duotone" /> Veg
+        </span>
+      );
+    } else if (priorityTag === 'spicy') {
+      return (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-[#3d1a16] text-[#f39c90] border-[#c0392b]/25 shrink-0 flex items-center gap-1">
+          <Fire size={11} weight="duotone" /> Spicy
+        </span>
+      );
+    }
+    return null;
   };
 
   const formatPrice = (price: number) => {
@@ -99,9 +104,7 @@ export function MenuItemCard({ item }: MenuItemCardProps) {
         <div className="flex items-center justify-between">
           {/* Prep Time */}
           <span className="text-[10px] font-mono text-text-muted flex items-center gap-1.5 font-semibold">
-            <svg className="h-3.5 w-3.5 text-text-muted group-hover:text-primary/70 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+                        <Clock size={14} weight="duotone" className="text-text-muted group-hover:text-primary/70 transition-colors" />
             {item.prepTime || '5 mins'}
           </span>
           

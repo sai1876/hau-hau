@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { TokenIcon } from './TokenIcon';
+import { Trash, Money, CreditCard, Coins, ArrowCircleUp } from '@phosphor-icons/react';
 
 interface CartPanelProps {
   onClose?: () => void;
@@ -55,9 +56,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
         <div className="absolute -right-16 -top-16 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
         
         <div className="w-12 h-12 rounded-full bg-surface border border-border flex items-center justify-center text-primary mb-4 shadow-inner animate-bounce">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-          </svg>
+                  <ArrowCircleUp size={28} weight="duotone" className="text-primary" />
         </div>
         <span className="text-foreground font-bold text-sm">Select a table to start</span>
         <p className="text-xs text-text-muted mt-2 max-w-[180px] mx-auto leading-relaxed">Choose a table from the grid above to begin taking an order</p>
@@ -140,9 +139,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
                     className="text-text-muted/60 hover:text-error hover:bg-error/10 p-1.5 rounded-md border border-transparent hover:border-error/20 transition-all cursor-pointer"
                     title="Remove item"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" strokeWidth={2.8} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                                        <Trash size={15} weight="duotone" />
                   </button>
                 </div>
               </div>
@@ -169,25 +166,13 @@ export function CartPanel({ onClose }: CartPanelProps) {
                 let icon = null;
 
                 if (mode === 'cash') {
-                  icon = (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.879c.97.97 2.63.97 3.6 0 1.18-1.18 1.18-3.1 0-4.282L10.5 10.18" />
-                    </svg>
-                  );
+                  icon = <Money size={17} weight="duotone" />;
                   if (active) borderClass = 'border-primary text-primary bg-primary/5 font-bold shadow-[0_0_12px_rgba(224,123,57,0.06)]';
                 } else if (mode === 'online') {
-                  icon = (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6" />
-                    </svg>
-                  );
+                  icon = <CreditCard size={17} weight="duotone" />;
                   if (active) borderClass = 'border-success text-[#71d384] bg-success/5 font-bold shadow-[0_0_12px_rgba(46,125,50,0.06)]';
                 } else if (mode === 'tokens') {
-                  icon = (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  );
+                  icon = <Coins size={17} weight="duotone" />;
                   if (active) borderClass = 'border-blue-500/40 text-blue-400 bg-blue-500/5 font-bold shadow-[0_0_12px_rgba(59,130,246,0.06)]';
                 }
 

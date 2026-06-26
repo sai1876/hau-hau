@@ -1,6 +1,7 @@
 import React from 'react';
 import { Order } from '../types';
 import { StatusBadge } from './StatusBadge';
+import { X } from '@phosphor-icons/react';
 
 interface OrderDetailsModalProps {
   order: Order | null;
@@ -29,7 +30,7 @@ export function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
             onClick={onClose}
             className="text-xs text-text-muted hover:text-foreground cursor-pointer w-7 h-7 bg-surface-container hover:bg-border rounded-full flex items-center justify-center transition-colors font-bold"
           >
-            ✕
+                        <X size={14} weight="bold" />
           </button>
         </div>
 

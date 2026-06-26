@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import StatusBadge from './StatusBadge';
 import { TokenIcon } from './TokenIcon';
+import { PencilSimple, ShieldCheck, Check, X } from '@phosphor-icons/react';
 
 export function ProfileSection() {
   const { currentUser, staffList, orders, tokenTransactions, updateProfile } = useApp();
@@ -127,7 +128,7 @@ export function ProfileSection() {
               <div className="flex justify-between items-center">
                 <span className="text-text-muted font-bold text-xs">Security Status</span>
                 <span className="text-[#71d384] font-bold text-xs flex items-center gap-1">
-                  🛡 Verified
+                  <ShieldCheck size={14} weight="duotone" /> Verified
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -174,7 +175,7 @@ export function ProfileSection() {
               <div className="flex flex-col gap-1 bg-surface-container/30 p-2.5 border border-border rounded-md text-[10px]">
                 <div className="flex items-center gap-1.5 font-bold">
                   <span className={passwordStrength.length ? 'text-[#71d384]' : 'text-text-muted/40'}>
-                    {passwordStrength.length ? '✓' : '✗'}
+                    {passwordStrength.length ? <Check size={12} weight="bold" /> : <X size={12} weight="bold" />}
                   </span>
                   <span className={passwordStrength.length ? 'text-foreground' : 'text-text-muted'}>
                     At least 6 characters long
@@ -182,7 +183,7 @@ export function ProfileSection() {
                 </div>
                 <div className="flex items-center gap-1.5 font-bold">
                   <span className={passwordStrength.match ? 'text-[#71d384]' : 'text-text-muted/40'}>
-                    {passwordStrength.match ? '✓' : '✗'}
+                    {passwordStrength.match ? <Check size={12} weight="bold" /> : <X size={12} weight="bold" />}
                   </span>
                   <span className={passwordStrength.match ? 'text-foreground' : 'text-text-muted'}>
                     Passwords match exactly
@@ -271,9 +272,9 @@ export function ProfileSection() {
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
-                className="minimal-btn-secondary px-3.5 py-1.5 text-[11px] font-bold rounded-md cursor-pointer active:scale-95 transition-transform"
+                className="minimal-btn-secondary px-3.5 py-1.5 text-[11px] font-bold rounded-md cursor-pointer active:scale-95 transition-transform flex items-center gap-1.5"
               >
-                ✏ Edit Profile
+                                <PencilSimple size={14} weight="duotone" /> Edit Profile
               </button>
             )}
           </div>

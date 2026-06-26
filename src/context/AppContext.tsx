@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { X as XIcon } from '@phosphor-icons/react';
 import { db } from '../services/db';
 import { MenuItem, Order, StaffAccount, CartItem, TokenAccount, TokenTransaction } from '../types';
 import { useRouter } from 'next/navigation';
@@ -1002,7 +1003,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 onClick={() => removeToast(toast.id)}
                 className="text-xs hover:text-white opacity-60 hover:opacity-100 transition-opacity"
               >
-                ✕
+                                <XIcon size={14} weight="bold" />
               </button>
             </div>
           );
