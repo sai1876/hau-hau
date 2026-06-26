@@ -17,28 +17,18 @@ export default function StaffDashboardPage() {
     orders, 
     activeTable, 
     tableCarts,
-    createNewMenuItem,
     addToCart
   } = useApp();
 
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
-  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+
 
   // Dynamic category calculations
   const menuCategories = Array.from(new Set(menu.map(item => item.category))).filter(Boolean);
   const existingCategories = menuCategories.length > 0 ? menuCategories : ['Burgers', 'Sides', 'Drinks', 'Combo'];
   const categories = ['All', ...existingCategories];
 
-  // Form states for creating menu item
-  const [itemName, setItemName] = useState('');
-  const [itemPrice, setItemPrice] = useState('');
-  const [itemCategory, setItemCategory] = useState('Burgers');
-  const [customCategory, setCustomCategory] = useState('');
-  const [itemDescription, setItemDescription] = useState('');
-  const [itemPrepTime, setItemPrepTime] = useState('');
-  const [itemTags, setItemTags] = useState({ spicy: false, veg: false, popular: false });
-  const [autoAddCurrentCart, setAutoAddCurrentCart] = useState(true);
 
   // Authenticate check
   useEffect(() => {
@@ -70,55 +60,6 @@ export default function StaffDashboardPage() {
   const currentCart = activeTable ? tableCarts[activeTable] || [] : [];
   const cartItemsCount = currentCart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = currentCart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!itemName || !itemPrice) return;
-
-    const parsedPrice = parseFloat(itemPrice);
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      alert('Please enter a valid price.');
-      return;
-    }
-
-    const finalCategory = itemCategory === '__custom__' ? customCategory.trim() : itemCategory;
-    if (!finalCategory) {
-      alert('Please enter or select a category.');
-      return;
-    }
-
-    const tags: ('spicy' | 'veg' | 'popular' | 'new')[] = [];
-    if (itemTags.spicy) tags.push('spicy');
-    if (itemTags.veg) tags.push('veg');
-    if (itemTags.popular) tags.push('popular');
-    tags.push('new');
-
-    const createdItem = await createNewMenuItem({
-      name: itemName,
-      price: parsedPrice,
-      category: finalCategory,
-      description: itemDescription || '',
-      prepTime: itemPrepTime || '5 mins',
-      tags
-    });
-
-    if (createdItem) {
-      // Auto-add to cart
-      if (activeTable && autoAddCurrentCart) {
-        addToCart(createdItem);
-      }
-      setIsRegisterOpen(false);
-      
-      // Reset Form
-      setItemName('');
-      setItemPrice('');
-      setItemCategory(existingCategories[0] || 'Burgers');
-      setCustomCategory('');
-      setItemDescription('');
-      setItemPrepTime('');
-      setItemTags({ spicy: false, veg: false, popular: false });
-    }
-  };
 
   return (
     <div className="flex-1 flex flex-col bg-zinc-950 min-h-screen pb-16 md:pb-0">
@@ -182,22 +123,8 @@ export default function StaffDashboardPage() {
                       {cat}
                     </button>
                   );
-                })}
-              </div>
-
-              {/* Register Item Button */}
-              <button
-                onClick={() => {
-                  setItemCategory(existingCategories[0] || 'Burgers');
-                  setIsRegisterOpen(true);
-                }}
-                className="minimal-btn-secondary px-3.5 py-2 rounded-sm text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-auto active:scale-95 transition-transform"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                Register Item
-              </button>
+              })}
+            </div>
             </div>
 
             {/* Menu Items Grid */}
@@ -275,179 +202,6 @@ export default function StaffDashboardPage() {
             <div className="h-full flex-1">
               <CartPanel onClose={() => setIsMobileCartOpen(false)} />
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Register Item Modal */}
-      {isRegisterOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in" onClick={() => setIsRegisterOpen(false)}>
-          <div 
-            className="bg-[#141416] border border-white/4 w-full max-w-md max-h-[90vh] rounded-md overflow-hidden flex flex-col shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="bg-zinc-950/80 px-5 py-4 border-b border-white/3 flex justify-between items-center shrink-0">
-              <div className="flex flex-col">
-                <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Quick Registration</span>
-                <span className="text-sm font-bold text-white mt-0.5">Register Food Item</span>
-              </div>
-              <button 
-                onClick={() => setIsRegisterOpen(false)}
-                className="text-[10px] text-zinc-400 hover:text-white uppercase font-bold tracking-wider cursor-pointer"
-              >
-                ✕ Close
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleRegisterSubmit} className="flex-1 flex flex-col overflow-hidden">
-              {/* Scrollable fields area */}
-              <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4 text-xs">
-                {/* Name */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-zinc-500 uppercase font-bold tracking-widest text-[9px]">Item Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Garlic Bread"
-                    value={itemName}
-                    onChange={(e) => setItemName(e.target.value)}
-                    className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700"
-                  />
-                </div>
-
-                {/* Price */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-zinc-500 uppercase font-bold tracking-widest text-[9px]">Price (₹)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="120"
-                    value={itemPrice}
-                    onChange={(e) => setItemPrice(e.target.value)}
-                    className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700 font-mono"
-                  />
-                </div>
-
-                {/* Category */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-zinc-500 uppercase font-bold tracking-widest text-[9px]">Category</label>
-                  <select
-                    value={itemCategory}
-                    onChange={(e) => setItemCategory(e.target.value)}
-                    className="minimal-input px-3.5 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-orange-500/40 bg-zinc-950"
-                  >
-                    {existingCategories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                    <option value="__custom__">+ Create Custom Category...</option>
-                  </select>
-                  {itemCategory === '__custom__' && (
-                    <input
-                      type="text"
-                      required
-                      placeholder="Enter custom category"
-                      value={customCategory}
-                      onChange={(e) => setCustomCategory(e.target.value)}
-                      className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700 mt-1.5 animate-slide-in"
-                    />
-                  )}
-                </div>
-
-                {/* Description */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-zinc-500 uppercase font-bold tracking-widest text-[9px]">Description</label>
-                  <textarea
-                    placeholder="Ingredients, prep notes... (optional)"
-                    value={itemDescription}
-                    onChange={(e) => setItemDescription(e.target.value)}
-                    rows={2}
-                    className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700 resize-none"
-                  />
-                </div>
-
-                {/* Prep Time */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-zinc-500 uppercase font-bold tracking-widest text-[9px]">Prep Estimate</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 5 mins (optional)"
-                    value={itemPrepTime}
-                    onChange={(e) => setItemPrepTime(e.target.value)}
-                    className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700"
-                  />
-                </div>
-
-                {/* Tags */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-zinc-500 uppercase font-bold tracking-widest text-[9px]">Item Flags</label>
-                  <div className="flex flex-col gap-2 bg-zinc-900/10 p-3 border border-white/2 rounded-sm">
-                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={itemTags.spicy}
-                        onChange={(e) => setItemTags(prev => ({ ...prev, spicy: e.target.checked }))}
-                        className="accent-orange-500 cursor-pointer"
-                      />
-                      <span>🔥 Spicy Item</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={itemTags.veg}
-                        onChange={(e) => setItemTags(prev => ({ ...prev, veg: e.target.checked }))}
-                        className="accent-emerald-500 cursor-pointer"
-                      />
-                      <span>🌱 Vegetarian Item</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={itemTags.popular}
-                        onChange={(e) => setItemTags(prev => ({ ...prev, popular: e.target.checked }))}
-                        className="accent-amber-500 cursor-pointer"
-                      />
-                      <span>⭐ Best Seller / Popular</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Auto-Add Toggle (only when table is active) */}
-                {activeTable && (
-                  <label className="flex items-center gap-2.5 cursor-pointer font-semibold text-zinc-300 border border-white/3 bg-zinc-900/10 p-3 rounded-sm active:scale-[0.98] transition-all">
-                    <input
-                      type="checkbox"
-                      checked={autoAddCurrentCart}
-                      onChange={(e) => setAutoAddCurrentCart(e.target.checked)}
-                      className="accent-orange-500 cursor-pointer h-3.5 w-3.5"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-zinc-200">Auto-add to active cart</span>
-                      <span className="text-[8px] text-zinc-500 uppercase tracking-wider mt-0.5">Will be added to Table: {activeTable}</span>
-                    </div>
-                  </label>
-                )}
-              </div>
-
-              {/* Buttons */}
-              <div className="bg-zinc-950/80 px-5 py-3.5 border-t border-white/3 flex justify-end gap-2.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsRegisterOpen(false)}
-                  className="minimal-btn-secondary px-4 py-2 text-[10px] font-bold uppercase tracking-wider rounded-sm cursor-pointer active:scale-95 transition-transform"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="minimal-btn-primary px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-white rounded-sm cursor-pointer active:scale-95 transition-transform"
-                >
-                  Register Item
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

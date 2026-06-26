@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
 
@@ -96,89 +96,98 @@ async function seed() {
     const DEFAULT_MENU = [
       { 
         id: 'm1', 
-        name: 'Burger', 
-        category: 'Burgers', 
-        price: 8.00, 
+        name: 'Veg Kurkure Momos', 
+        category: 'Momos', 
+        price: 80.00, 
         available: true,
-        description: 'Classic flame-grilled beef patty, lettuce, tomato, house sauce',
-        prepTime: '6-8 mins',
-        tags: ['popular']
+        description: 'Crispy crunchy momos stuffed with spiced vegetables, coated in Kurkure crumbs',
+        prepTime: '8-10 mins',
+        tags: ['veg', 'popular']
       },
       { 
         id: 'm2', 
-        name: 'Cheese Burger', 
-        category: 'Burgers', 
-        price: 9.50, 
+        name: 'French Fries', 
+        category: 'Sides', 
+        price: 60.00, 
         available: true,
-        description: 'Juicy beef patty, melted double cheddar, pickles, mustard, glaze',
+        description: 'Crispy golden salted potato fries served with dip',
+        prepTime: '4-5 mins',
+        tags: ['veg']
+      },
+      { 
+        id: 'm3', 
+        name: 'Chicken Popcorn', 
+        category: 'Snacks', 
+        price: 90.00, 
+        available: true,
+        description: 'Bite-sized tender chicken pieces, marinated and deep fried to golden perfection',
         prepTime: '6-8 mins',
         tags: ['popular']
       },
       { 
-        id: 'm3', 
-        name: 'Veg Burger', 
-        category: 'Burgers', 
-        price: 7.50, 
-        available: true,
-        description: 'Handcrafted spiced lentil & veggie patty, avocado spread, arugula',
-        prepTime: '8-10 mins',
-        tags: ['veg']
-      },
-      { 
         id: 'm4', 
-        name: 'Fries', 
-        category: 'Sides', 
-        price: 3.00, 
+        name: 'Chicken Leg Piece', 
+        category: 'Snacks', 
+        price: 100.00, 
         available: true,
-        description: 'Crispy golden sea-salted skin-on potatoes',
-        prepTime: '4-5 mins',
-        tags: ['veg']
+        description: 'Juicy chicken drumsticks seasoned with Indian spices and deep fried',
+        prepTime: '10-12 mins',
+        tags: ['popular']
       },
       { 
         id: 'm5', 
-        name: 'Masala Fries', 
-        category: 'Sides', 
-        price: 4.00, 
+        name: 'Veg Fingers', 
+        category: 'Snacks', 
+        price: 80.00, 
         available: true,
-        description: 'Golden fries tossed in a spicy dry rub of aromatic Indian spices',
-        prepTime: '4-5 mins',
-        tags: ['spicy', 'veg']
-      },
-      { 
-        id: 'm6', 
-        name: 'Cold Coffee', 
-        category: 'Drinks', 
-        price: 4.50, 
-        available: true,
-        description: 'Chilled robust espresso blend whipped with creamy whole milk',
-        prepTime: '2-3 mins',
-        tags: []
-      },
-      { 
-        id: 'm7', 
-        name: 'Water Bottle', 
-        category: 'Drinks', 
-        price: 1.50, 
-        available: true,
-        description: 'Purified mineral spring water, chilled',
-        prepTime: '1 min',
+        description: 'Crispy crumb-coated vegetable fingers made with carrots, peas, and potatoes',
+        prepTime: '5-6 mins',
         tags: ['veg']
       },
       { 
-        id: 'm8', 
-        name: 'Combo Meal', 
-        category: 'Combo', 
-        price: 12.00, 
+        id: 'm6', 
+        name: 'Veg Nuggets', 
+        category: 'Snacks', 
+        price: 70.00, 
         available: true,
-        description: 'Classic Burger, salted fries, and a chilled drink of choice',
-        prepTime: '8-10 mins',
+        description: 'Bite-sized crispy vegetable nuggets seasoned with herbs and spices',
+        prepTime: '5-6 mins',
+        tags: ['veg']
+      },
+      { 
+        id: 'm7', 
+        name: 'Plane Chocolate Milk Shake', 
+        category: 'Drinks', 
+        price: 79.00, 
+        available: true,
+        description: 'Classic thick and creamy milkshake blended with rich chocolate syrup',
+        prepTime: '3-4 mins',
+        tags: []
+      },
+      { 
+        id: 'm8', 
+        name: 'Oreo and Kitkat', 
+        category: 'Drinks', 
+        price: 89.00, 
+        available: true,
+        description: 'Indulgent thick shake loaded with crushed Oreo cookies and KitKat bars',
+        prepTime: '4-5 mins',
         tags: ['popular']
       }
     ];
 
+    console.log('Clearing existing menu items...');
+    const menuCol = collection(firestore, 'menu');
+    const menuSnapshot = await getDocs(menuCol);
+    for (const d of menuSnapshot.docs) {
+      await deleteDoc(doc(firestore, 'menu', d.id));
+      console.log(`Deleted menu item: ${d.id}`);
+    }
+
     console.log('Seeding default menu items...');
     for (const item of DEFAULT_MENU) {
       await setDoc(doc(firestore, 'menu', item.id), item);
+      console.log(`Added menu item: ${item.name} (${item.id})`);
     }
 
     console.log('Seeding complete! Owner and Staff accounts created in Auth and Firestore.');
