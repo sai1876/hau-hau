@@ -77,6 +77,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
   const [toasts, setToasts] = useState<AppContextType['toasts']>([]);
   const toastIdRef = useRef(0);
+  const [usingFirebase, setUsingFirebase] = useState(db.isFirebaseConfigured());
 
   // Custom Confirm Dialog State
   const [confirmModal, setConfirmModal] = useState<{
@@ -121,6 +122,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, 3000);
   }, [removeToast]);
 
+  // Listen to fallback events (e.g. adblocker blocking firestore)
+  useEffect(() => {
+    const handleFallback = () => {
+      setUsingFirebase(false);
+      addToast('Firestore connection blocked. Switched to LocalStorage mode.', 'warning');
+    };
+    window.addEventListener('firebase-fallback', handleFallback);
+    return () => {
+      window.removeEventListener('firebase-fallback', handleFallback);
+    };
+  }, [addToast]);
+
   // Initialize data subscriptions on mount
   useEffect(() => {
     // 1. Subscribe to Menu
@@ -146,7 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Defer state updates to prevent synchronous setState inside useEffect
     let unsubAuth = () => {};
     const timer = setTimeout(() => {
-      if (db.isFirebaseConfigured()) {
+      if (usingFirebase) {
         unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
           if (firebaseUser) {
             try {
@@ -184,6 +197,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } else {
             setCurrentUser(null);
           }
+        }, (error) => {
+          console.warn("Auth state changed error/blocked. Triggering LocalStorage fallback:", error);
+          db.markFirebaseBlocked();
         });
       } else {
         const savedUser = localStorage.getItem('hau_hau_session');
@@ -206,7 +222,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubAuth();
       clearTimeout(timer);
     };
-  }, [router, addToast]);
+  }, [router, addToast, usingFirebase]);
 
   // Save carts when they change
   useEffect(() => {

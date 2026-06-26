@@ -17,14 +17,27 @@ const STAFF_KEY = 'hau_hau_staff';
 const ORDERS_KEY = 'hau_hau_orders';
 const TOKENS_KEY = 'hau_hau_tokens';
 
+let firebaseBlocked = false;
+
 // Check if Firebase is actually configured with environment variables
 export const isFirebaseConfigured = () => {
+  if (firebaseBlocked) return false;
   return !!(
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== 'undefined' &&
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== 'undefined'
   );
+};
+
+export const markFirebaseBlocked = () => {
+  if (!firebaseBlocked) {
+    console.warn("Firebase/Firestore was blocked or failed to load. Falling back to LocalStorage mode.");
+    firebaseBlocked = true;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('firebase-fallback'));
+    }
+  }
 };
 
 const DEFAULT_MENU: MenuItem[] = [
@@ -123,6 +136,7 @@ const DEFAULT_STAFF: StaffAccount[] = [
 
 export const db = {
   isFirebaseConfigured,
+  markFirebaseBlocked,
   // Initialize Database (for LocalStorage mode)
   init(): void {
     if (typeof window === 'undefined') return;
@@ -154,15 +168,63 @@ export const db = {
     }
   },
 
+  // --- LocalStorage Subscriptions Helpers ---
+  subscribeLocalStorageMenu(callback: (menu: MenuItem[]) => void): () => void {
+    this.init();
+    const load = () => {
+      const menu = localStorage.getItem(MENU_KEY);
+      callback(menu ? JSON.parse(menu) : DEFAULT_MENU);
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  },
+
+  subscribeLocalStorageOrders(callback: (orders: Order[]) => void): () => void {
+    this.init();
+    const load = () => {
+      const orders = localStorage.getItem(ORDERS_KEY);
+      callback(orders ? JSON.parse(orders) : []);
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  },
+
+  subscribeLocalStorageStaff(callback: (staff: StaffAccount[]) => void): () => void {
+    this.init();
+    const load = () => {
+      const staff = localStorage.getItem(STAFF_KEY);
+      callback(staff ? JSON.parse(staff) : DEFAULT_STAFF);
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  },
+
+  subscribeLocalStorageTokens(callback: (tokens: TokenAccount[]) => void): () => void {
+    this.init();
+    const load = () => {
+      const tokens = localStorage.getItem(TOKENS_KEY);
+      callback(tokens ? JSON.parse(tokens) : []);
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  },
+
   // --- Real-time subscriptions ---
   subscribeMenu(callback: (menu: MenuItem[]) => void): () => void {
     if (isFirebaseConfigured()) {
       const menuCol = collection(firestore, 'menu');
-      return onSnapshot(menuCol, (snapshot) => {
+      let isUnsubscribed = false;
+      let localUnsub = () => {};
+      const firestoreUnsub = onSnapshot(menuCol, (snapshot) => {
+        if (isUnsubscribed) return;
         if (snapshot.empty) {
           // Auto-seed Firestore if empty
           DEFAULT_MENU.forEach((item) => {
-            setDoc(doc(firestore, 'menu', item.id), item);
+            setDoc(doc(firestore, 'menu', item.id), item).catch(() => {});
           });
           callback(DEFAULT_MENU);
         } else {
@@ -172,17 +234,20 @@ export const db = {
           });
           callback(menuItems);
         }
+      }, (error) => {
+        console.warn("Firestore menu subscription failed/blocked. Falling back to LocalStorage.", error);
+        this.markFirebaseBlocked();
+        if (!isUnsubscribed) {
+          localUnsub = this.subscribeLocalStorageMenu(callback);
+        }
       });
-    } else {
-      // LocalStorage mode
-      this.init();
-      const load = () => {
-        const menu = localStorage.getItem(MENU_KEY);
-        callback(menu ? JSON.parse(menu) : DEFAULT_MENU);
+      return () => {
+        isUnsubscribed = true;
+        firestoreUnsub();
+        localUnsub();
       };
-      load();
-      window.addEventListener('storage', load);
-      return () => window.removeEventListener('storage', load);
+    } else {
+      return this.subscribeLocalStorageMenu(callback);
     }
   },
 
@@ -190,34 +255,43 @@ export const db = {
     if (isFirebaseConfigured()) {
       const ordersCol = collection(firestore, 'orders');
       const ordersQuery = query(ordersCol, orderBy('createdAt', 'desc'));
-      return onSnapshot(ordersQuery, (snapshot) => {
+      let isUnsubscribed = false;
+      let localUnsub = () => {};
+      const firestoreUnsub = onSnapshot(ordersQuery, (snapshot) => {
+        if (isUnsubscribed) return;
         const ordersList: Order[] = [];
         snapshot.forEach((doc) => {
           ordersList.push(doc.data() as Order);
         });
         callback(ordersList);
+      }, (error) => {
+        console.warn("Firestore orders subscription failed/blocked. Falling back to LocalStorage.", error);
+        this.markFirebaseBlocked();
+        if (!isUnsubscribed) {
+          localUnsub = this.subscribeLocalStorageOrders(callback);
+        }
       });
-    } else {
-      // LocalStorage mode
-      this.init();
-      const load = () => {
-        const orders = localStorage.getItem(ORDERS_KEY);
-        callback(orders ? JSON.parse(orders) : []);
+      return () => {
+        isUnsubscribed = true;
+        firestoreUnsub();
+        localUnsub();
       };
-      load();
-      window.addEventListener('storage', load);
-      return () => window.removeEventListener('storage', load);
+    } else {
+      return this.subscribeLocalStorageOrders(callback);
     }
   },
 
   subscribeStaff(callback: (staff: StaffAccount[]) => void): () => void {
     if (isFirebaseConfigured()) {
       const staffCol = collection(firestore, 'staff');
-      return onSnapshot(staffCol, (snapshot) => {
+      let isUnsubscribed = false;
+      let localUnsub = () => {};
+      const firestoreUnsub = onSnapshot(staffCol, (snapshot) => {
+        if (isUnsubscribed) return;
         if (snapshot.empty) {
           // Auto-seed
           DEFAULT_STAFF.forEach((member) => {
-            setDoc(doc(firestore, 'staff', member.id), member);
+            setDoc(doc(firestore, 'staff', member.id), member).catch(() => {});
           });
           callback(DEFAULT_STAFF);
         } else {
@@ -227,39 +301,49 @@ export const db = {
           });
           callback(staffList);
         }
+      }, (error) => {
+        console.warn("Firestore staff subscription failed/blocked. Falling back to LocalStorage.", error);
+        this.markFirebaseBlocked();
+        if (!isUnsubscribed) {
+          localUnsub = this.subscribeLocalStorageStaff(callback);
+        }
       });
-    } else {
-      // LocalStorage mode
-      this.init();
-      const load = () => {
-        const staff = localStorage.getItem(STAFF_KEY);
-        callback(staff ? JSON.parse(staff) : DEFAULT_STAFF);
+      return () => {
+        isUnsubscribed = true;
+        firestoreUnsub();
+        localUnsub();
       };
-      load();
-      window.addEventListener('storage', load);
-      return () => window.removeEventListener('storage', load);
+    } else {
+      return this.subscribeLocalStorageStaff(callback);
     }
   },
   
   subscribeTokens(callback: (tokens: TokenAccount[]) => void): () => void {
     if (isFirebaseConfigured()) {
       const tokensCol = collection(firestore, 'tokens');
-      return onSnapshot(tokensCol, (snapshot) => {
+      let isUnsubscribed = false;
+      let localUnsub = () => {};
+      const firestoreUnsub = onSnapshot(tokensCol, (snapshot) => {
+        if (isUnsubscribed) return;
         const tokensList: TokenAccount[] = [];
         snapshot.forEach((doc) => {
           tokensList.push(doc.data() as TokenAccount);
         });
         callback(tokensList);
+      }, (error) => {
+        console.warn("Firestore tokens subscription failed/blocked. Falling back to LocalStorage.", error);
+        this.markFirebaseBlocked();
+        if (!isUnsubscribed) {
+          localUnsub = this.subscribeLocalStorageTokens(callback);
+        }
       });
-    } else {
-      this.init();
-      const load = () => {
-        const tokens = localStorage.getItem(TOKENS_KEY);
-        callback(tokens ? JSON.parse(tokens) : []);
+      return () => {
+        isUnsubscribed = true;
+        firestoreUnsub();
+        localUnsub();
       };
-      load();
-      window.addEventListener('storage', load);
-      return () => window.removeEventListener('storage', load);
+    } else {
+      return this.subscribeLocalStorageTokens(callback);
     }
   },
 
@@ -271,9 +355,18 @@ export const db = {
       available: true
     };
 
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await setDoc(doc(firestore, 'menu', newItem.id), newItem);
-    } else {
+      try {
+        await setDoc(doc(firestore, 'menu', newItem.id), newItem);
+      } catch (error) {
+        console.error("Firestore addMenuItem failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const menu = localStorage.getItem(MENU_KEY);
       const list = menu ? JSON.parse(menu) : DEFAULT_MENU;
       list.push(newItem);
@@ -284,22 +377,30 @@ export const db = {
   },
 
   async toggleMenuAvailability(itemId: string): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      const menuCol = collection(firestore, 'menu');
-      // Fetch item first to get current availability
-      const snapshot = await getDocs(menuCol);
-      let currentItem: MenuItem | null = null;
-      snapshot.forEach((doc) => {
-        if (doc.id === itemId) {
-          currentItem = doc.data() as MenuItem;
-        }
-      });
-      if (currentItem) {
-        await updateDoc(doc(firestore, 'menu', itemId), {
-          available: !(currentItem as MenuItem).available
+      try {
+        const menuCol = collection(firestore, 'menu');
+        const snapshot = await getDocs(menuCol);
+        let currentItem: MenuItem | null = null;
+        snapshot.forEach((doc) => {
+          if (doc.id === itemId) {
+            currentItem = doc.data() as MenuItem;
+          }
         });
+        if (currentItem) {
+          await updateDoc(doc(firestore, 'menu', itemId), {
+            available: !(currentItem as MenuItem).available
+          });
+        }
+      } catch (error) {
+        console.error("Firestore toggleMenuAvailability failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
       }
-    } else {
+    }
+
+    if (useLocal) {
       const menu = localStorage.getItem(MENU_KEY);
       const list: MenuItem[] = menu ? JSON.parse(menu) : DEFAULT_MENU;
       const updated = list.map(item => 
@@ -311,9 +412,18 @@ export const db = {
   },
 
   async deleteMenuItem(itemId: string): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await deleteDoc(doc(firestore, 'menu', itemId));
-    } else {
+      try {
+        await deleteDoc(doc(firestore, 'menu', itemId));
+      } catch (error) {
+        console.error("Firestore deleteMenuItem failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const menu = localStorage.getItem(MENU_KEY);
       const list: MenuItem[] = menu ? JSON.parse(menu) : DEFAULT_MENU;
       const updated = list.filter(item => item.id !== itemId);
@@ -323,9 +433,18 @@ export const db = {
   },
 
   async updateMenuItem(itemId: string, updatedFields: Partial<Omit<MenuItem, 'id'>>): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await updateDoc(doc(firestore, 'menu', itemId), updatedFields);
-    } else {
+      try {
+        await updateDoc(doc(firestore, 'menu', itemId), updatedFields);
+      } catch (error) {
+        console.error("Firestore updateMenuItem failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const menu = localStorage.getItem(MENU_KEY);
       const list: MenuItem[] = menu ? JSON.parse(menu) : DEFAULT_MENU;
       const updated = list.map(item => 
@@ -343,9 +462,18 @@ export const db = {
       id: 's_' + Math.random().toString(36).substr(2, 9)
     };
 
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await setDoc(doc(firestore, 'staff', newAccount.id), newAccount);
-    } else {
+      try {
+        await setDoc(doc(firestore, 'staff', newAccount.id), newAccount);
+      } catch (error) {
+        console.error("Firestore addStaff failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const staff = localStorage.getItem(STAFF_KEY);
       const list: StaffAccount[] = staff ? JSON.parse(staff) : DEFAULT_STAFF;
       list.push(newAccount);
@@ -361,9 +489,18 @@ export const db = {
       id
     };
 
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await setDoc(doc(firestore, 'staff', id), newAccount);
-    } else {
+      try {
+        await setDoc(doc(firestore, 'staff', id), newAccount);
+      } catch (error) {
+        console.error("Firestore addStaffWithId failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const staff = localStorage.getItem(STAFF_KEY);
       const list: StaffAccount[] = staff ? JSON.parse(staff) : DEFAULT_STAFF;
       list.push(newAccount);
@@ -374,21 +511,30 @@ export const db = {
   },
 
   async toggleStaffStatus(staffId: string): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      const staffCol = collection(firestore, 'staff');
-      const snapshot = await getDocs(staffCol);
-      let currentStaff: StaffAccount | null = null;
-      snapshot.forEach((doc) => {
-        if (doc.id === staffId) {
-          currentStaff = doc.data() as StaffAccount;
-        }
-      });
-      if (currentStaff) {
-        await updateDoc(doc(firestore, 'staff', staffId), {
-          status: (currentStaff as StaffAccount).status === 'active' ? 'inactive' : 'active'
+      try {
+        const staffCol = collection(firestore, 'staff');
+        const snapshot = await getDocs(staffCol);
+        let currentStaff: StaffAccount | null = null;
+        snapshot.forEach((doc) => {
+          if (doc.id === staffId) {
+            currentStaff = doc.data() as StaffAccount;
+          }
         });
+        if (currentStaff) {
+          await updateDoc(doc(firestore, 'staff', staffId), {
+            status: (currentStaff as StaffAccount).status === 'active' ? 'inactive' : 'active'
+          });
+        }
+      } catch (error) {
+        console.error("Firestore toggleStaffStatus failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
       }
-    } else {
+    }
+
+    if (useLocal) {
       const staff = localStorage.getItem(STAFF_KEY);
       const list: StaffAccount[] = staff ? JSON.parse(staff) : DEFAULT_STAFF;
       const updated = list.map(s => 
@@ -400,9 +546,18 @@ export const db = {
   },
 
   async deleteStaff(staffId: string): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await deleteDoc(doc(firestore, 'staff', staffId));
-    } else {
+      try {
+        await deleteDoc(doc(firestore, 'staff', staffId));
+      } catch (error) {
+        console.error("Firestore deleteStaff failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const staff = localStorage.getItem(STAFF_KEY);
       const list: StaffAccount[] = staff ? JSON.parse(staff) : DEFAULT_STAFF;
       const updated = list.filter(s => s.id !== staffId);
@@ -421,9 +576,18 @@ export const db = {
       createdAt: new Date().toISOString()
     };
 
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await setDoc(doc(firestore, 'orders', newOrder.id), newOrder);
-    } else {
+      try {
+        await setDoc(doc(firestore, 'orders', newOrder.id), newOrder);
+      } catch (error) {
+        console.error("Firestore createOrder failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const orders = localStorage.getItem(ORDERS_KEY);
       const list: Order[] = orders ? JSON.parse(orders) : [];
       list.unshift(newOrder);
@@ -434,20 +598,29 @@ export const db = {
   },
 
   async updateOrderStatus(orderId: string, status: 'pending' | 'completed' | 'cancelled'): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      const completedAt = status === 'completed' ? new Date().toISOString() : null;
-      const paymentStatus = status === 'completed' ? 'paid' : 'pending';
-      
-      const updateData: Partial<Order> = {
-        orderStatus: status,
-        paymentStatus
-      };
-      if (completedAt) {
-        updateData.completedAt = completedAt;
+      try {
+        const completedAt = status === 'completed' ? new Date().toISOString() : null;
+        const paymentStatus = status === 'completed' ? 'paid' : 'pending';
+        
+        const updateData: Partial<Order> = {
+          orderStatus: status,
+          paymentStatus
+        };
+        if (completedAt) {
+          updateData.completedAt = completedAt;
+        }
+        
+        await updateDoc(doc(firestore, 'orders', orderId), updateData);
+      } catch (error) {
+        console.error("Firestore updateOrderStatus failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
       }
-      
-      await updateDoc(doc(firestore, 'orders', orderId), updateData);
-    } else {
+    }
+
+    if (useLocal) {
       const orders = localStorage.getItem(ORDERS_KEY);
       const list: Order[] = orders ? JSON.parse(orders) : [];
       const updated = list.map(order => {
@@ -471,9 +644,18 @@ export const db = {
       createdAt: new Date().toISOString()
     };
 
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await setDoc(doc(firestore, 'tokens', newAccount.id), newAccount);
-    } else {
+      try {
+        await setDoc(doc(firestore, 'tokens', newAccount.id), newAccount);
+      } catch (error) {
+        console.error("Firestore addTokenAccount failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const tokens = localStorage.getItem(TOKENS_KEY);
       const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
       list.push(newAccount);
@@ -484,9 +666,18 @@ export const db = {
   },
 
   async updateTokenAccount(tokenId: string, updatedFields: Partial<Omit<TokenAccount, 'id'>>): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await updateDoc(doc(firestore, 'tokens', tokenId), updatedFields);
-    } else {
+      try {
+        await updateDoc(doc(firestore, 'tokens', tokenId), updatedFields);
+      } catch (error) {
+        console.error("Firestore updateTokenAccount failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const tokens = localStorage.getItem(TOKENS_KEY);
       const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
       const updated = list.map(t => t.id === tokenId ? { ...t, ...updatedFields } : t);
@@ -496,9 +687,18 @@ export const db = {
   },
 
   async deleteTokenAccount(tokenId: string): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
-      await deleteDoc(doc(firestore, 'tokens', tokenId));
-    } else {
+      try {
+        await deleteDoc(doc(firestore, 'tokens', tokenId));
+      } catch (error) {
+        console.error("Firestore deleteTokenAccount failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
       const tokens = localStorage.getItem(TOKENS_KEY);
       const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
       const updated = list.filter(t => t.id !== tokenId);
