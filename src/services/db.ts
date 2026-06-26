@@ -1,5 +1,5 @@
 import { firestore } from './firebase';
-import { MenuItem, Order, StaffAccount, TokenAccount } from '../types';
+import { MenuItem, Order, StaffAccount, TokenAccount, TokenTransaction } from '../types';
 import { 
   collection, 
   doc, 
@@ -16,6 +16,7 @@ const MENU_KEY = 'hau_hau_menu';
 const STAFF_KEY = 'hau_hau_staff';
 const ORDERS_KEY = 'hau_hau_orders';
 const TOKENS_KEY = 'hau_hau_tokens';
+const TRANSACTIONS_KEY = 'hau_hau_transactions';
 
 let firebaseBlocked = false;
 
@@ -166,6 +167,9 @@ export const db = {
     if (!localStorage.getItem(TOKENS_KEY)) {
       localStorage.setItem(TOKENS_KEY, JSON.stringify([]));
     }
+    if (!localStorage.getItem(TRANSACTIONS_KEY)) {
+      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([]));
+    }
   },
 
   // --- LocalStorage Subscriptions Helpers ---
@@ -207,6 +211,17 @@ export const db = {
     const load = () => {
       const tokens = localStorage.getItem(TOKENS_KEY);
       callback(tokens ? JSON.parse(tokens) : []);
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  },
+
+  subscribeLocalStorageTransactions(callback: (txs: TokenTransaction[]) => void): () => void {
+    this.init();
+    const load = () => {
+      const txs = localStorage.getItem(TRANSACTIONS_KEY);
+      callback(txs ? JSON.parse(txs) : []);
     };
     load();
     window.addEventListener('storage', load);
@@ -345,6 +360,64 @@ export const db = {
     } else {
       return this.subscribeLocalStorageTokens(callback);
     }
+  },
+
+  subscribeTokenTransactions(callback: (txs: TokenTransaction[]) => void): () => void {
+    if (isFirebaseConfigured()) {
+      const txsCol = collection(firestore, 'token_transactions');
+      const txsQuery = query(txsCol, orderBy('createdAt', 'desc'));
+      let isUnsubscribed = false;
+      let localUnsub = () => {};
+      const firestoreUnsub = onSnapshot(txsQuery, (snapshot) => {
+        if (isUnsubscribed) return;
+        const txsList: TokenTransaction[] = [];
+        snapshot.forEach((doc) => {
+          txsList.push(doc.data() as TokenTransaction);
+        });
+        callback(txsList);
+      }, (error) => {
+        console.warn("Firestore transactions subscription failed/blocked. Falling back to LocalStorage.", error);
+        this.markFirebaseBlocked();
+        if (!isUnsubscribed) {
+          localUnsub = this.subscribeLocalStorageTransactions(callback);
+        }
+      });
+      return () => {
+        isUnsubscribed = true;
+        firestoreUnsub();
+        localUnsub();
+      };
+    } else {
+      return this.subscribeLocalStorageTransactions(callback);
+    }
+  },
+
+  async addTokenTransaction(tx: Omit<TokenTransaction, 'id' | 'createdAt'>): Promise<TokenTransaction> {
+    const newTx: TokenTransaction = {
+      ...tx,
+      id: 'tx_' + Math.random().toString(36).substr(2, 9),
+      createdAt: new Date().toISOString()
+    };
+
+    let useLocal = !isFirebaseConfigured();
+    if (isFirebaseConfigured()) {
+      try {
+        await setDoc(doc(firestore, 'token_transactions', newTx.id), newTx);
+      } catch (error) {
+        console.error("Firestore addTokenTransaction failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
+      const txs = localStorage.getItem(TRANSACTIONS_KEY);
+      const list: TokenTransaction[] = txs ? JSON.parse(txs) : [];
+      list.unshift(newTx);
+      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(list));
+      window.dispatchEvent(new Event('storage'));
+    }
+    return newTx;
   },
 
   // --- Menu Write Operations ---

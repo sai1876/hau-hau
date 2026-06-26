@@ -24,7 +24,9 @@ export default function OwnerDashboardPage() {
     removeMenuItem,
     createNewMenuItem,
     updateMenuItem,
-    confirmAction
+    confirmAction,
+    tokenTransactions,
+    staffList
   } = useApp();
 
   // Navigation Tabs for Command Center
@@ -699,18 +701,57 @@ export default function OwnerDashboardPage() {
 
           {/* 4. TOKEN CARDS WORKSPACE */}
           {activeWorkspace === 'tokens' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-in">
-              {/* Token Cards List */}
-              <div className="lg:col-span-2">
-                <TokenList onStartEdit={setEditingToken} onViewHistory={setHistoryToken} />
+            <div className="flex flex-col gap-6 animate-slide-in">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                {/* Token Cards List */}
+                <div className="lg:col-span-2">
+                  <TokenList onStartEdit={setEditingToken} onViewHistory={setHistoryToken} />
+                </div>
+
+                {/* Create/Edit Token Card Form */}
+                <div className="lg:col-span-1">
+                  <TokenAccountForm
+                    editingToken={editingToken}
+                    onCancelEdit={() => setEditingToken(null)}
+                  />
+                </div>
               </div>
 
-              {/* Create/Edit Token Card Form */}
-              <div className="lg:col-span-1">
-                <TokenAccountForm
-                  editingToken={editingToken}
-                  onCancelEdit={() => setEditingToken(null)}
-                />
+              {/* Token Sales Summary Table */}
+              <div className="minimal-card rounded-md overflow-hidden">
+                <div className="bg-zinc-950/85 px-4 py-3 border-b border-white/3 flex justify-between items-center">
+                  <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
+                    Token Sales Summary by Staff Member
+                  </h3>
+                </div>
+                <div className="p-4">
+                  {staffList.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-zinc-600 font-bold uppercase">
+                      No staff accounts registered
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {staffList.map((staff) => {
+                        const staffTxs = tokenTransactions.filter(tx => tx.soldBy === staff.username);
+                        const tokensSold = staffTxs.reduce((sum, tx) => sum + tx.tokens, 0);
+                        const amountCollected = staffTxs.reduce((sum, tx) => sum + tx.amount, 0);
+
+                        return (
+                          <div key={staff.id} className="bg-zinc-900/10 border border-white/2 p-4 rounded-sm flex justify-between items-center">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-zinc-200">{staff.name}</span>
+                              <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-wider mt-0.5">@{staff.username}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="block font-mono font-bold text-xs text-blue-400">{tokensSold.toFixed(2)} TK</span>
+                              <span className="block font-mono text-[10px] text-emerald-500 font-bold mt-0.5">₹{amountCollected.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -894,7 +935,7 @@ export default function OwnerDashboardPage() {
             <div className="bg-zinc-950/80 px-5 py-4 border-b border-white/3 flex justify-between items-center shrink-0">
               <div className="flex flex-col">
                 <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Student Card Ledger</span>
-                <span className="text-sm font-bold text-white mt-0.5">Order History: {historyToken.name} (Card #{historyToken.cardNo})</span>
+                <span className="text-sm font-bold text-white mt-0.5">Recharge History: {historyToken.name} (Card #{historyToken.cardNo})</span>
               </div>
               <button 
                 onClick={() => setHistoryToken(null)}
@@ -934,57 +975,43 @@ export default function OwnerDashboardPage() {
                 </div>
               </div>
 
-              {/* Orders List Table */}
+              {/* Recharges List Table */}
               <div className="border border-white/3 rounded-sm overflow-hidden mt-2">
-                {orders.filter(o => o.paymentMode === 'tokens' && o.tokenCardNo === historyToken.cardNo).length === 0 ? (
+                {tokenTransactions.filter(tx => tx.studentId === historyToken.id).length === 0 ? (
                   <div className="p-8 text-center text-zinc-500 italic bg-zinc-950/20 font-semibold uppercase tracking-wider text-[10px]">
-                    No transaction records found for this card
+                    No recharge records found for this card
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse text-[11px]">
                       <thead>
                         <tr className="border-b border-white/3 bg-zinc-950/60 text-zinc-500">
-                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Order ID</th>
+                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Transaction ID</th>
                           <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Date & Time</th>
-                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Items</th>
-                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Deducted</th>
-                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Total Value</th>
-                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px] text-center">Status</th>
+                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Tokens Added</th>
+                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Amount Paid</th>
+                          <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Operator</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/2 bg-zinc-950/10">
-                        {orders
-                          .filter(o => o.paymentMode === 'tokens' && o.tokenCardNo === historyToken.cardNo)
-                          .map((order) => (
-                            <tr key={order.id} className="hover:bg-white/1 transition-colors">
-                              <td className="p-2.5 font-bold text-zinc-300 font-mono">{order.id}</td>
+                        {tokenTransactions
+                          .filter(tx => tx.studentId === historyToken.id)
+                          .map((tx) => (
+                            <tr key={tx.id} className="hover:bg-white/1 transition-colors">
+                              <td className="p-2.5 font-bold text-zinc-300 font-mono">{tx.id}</td>
                               <td className="p-2.5 text-zinc-500 font-medium">
-                                {new Date(order.createdAt).toLocaleString([], {
+                                {new Date(tx.createdAt).toLocaleString([], {
                                   month: 'short',
                                   day: 'numeric',
                                   hour: '2-digit',
                                   minute: '2-digit',
                                 })}
                               </td>
-                              <td className="p-2.5 text-zinc-400 font-semibold max-w-[200px] truncate" title={order.items.map(i => `${i.name} x${i.quantity}`).join(', ')}>
-                                {order.items.map(i => `${i.name} x${i.quantity}`).join(', ')}
+                              <td className="p-2.5 text-blue-400 font-mono font-bold">
+                                +{tx.tokens} tokens
                               </td>
-                              <td className="p-2.5 text-orange-400 font-mono font-bold">
-                                {order.tokensDeducted || (order.total / 30).toFixed(2)} tokens
-                              </td>
-                              <td className="p-2.5 text-zinc-200 font-mono font-bold">₹{order.total.toFixed(2)}</td>
-                              <td className="p-2.5 text-center">
-                                <span className={`inline-block px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
-                                  order.orderStatus === 'completed' 
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' 
-                                    : order.orderStatus === 'cancelled' 
-                                    ? 'bg-red-500/10 text-red-400 border border-red-500/25' 
-                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
-                                }`}>
-                                  {order.orderStatus}
-                                </span>
-                              </td>
+                              <td className="p-2.5 text-emerald-400 font-mono font-bold">₹{tx.amount.toFixed(2)}</td>
+                              <td className="p-2.5 text-zinc-400 font-semibold">{tx.soldBy}</td>
                             </tr>
                           ))}
                       </tbody>

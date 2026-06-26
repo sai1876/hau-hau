@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../services/db';
-import { MenuItem, Order, StaffAccount, CartItem, TokenAccount } from '../types';
+import { MenuItem, Order, StaffAccount, CartItem, TokenAccount, TokenTransaction } from '../types';
 import { useRouter } from 'next/navigation';
 import { auth, firestore } from '@/services/firebase';
 import { 
@@ -20,6 +20,7 @@ interface AppContextType {
   orders: Order[];
   staffList: StaffAccount[];
   tokens: TokenAccount[];
+  tokenTransactions: TokenTransaction[];
   currentUser: { name: string; role: 'staff' | 'owner'; username: string } | null;
   activeTable: string | null;
   tableCarts: Record<string, CartItem[]>; // tableNumber -> CartItem[]
@@ -53,6 +54,7 @@ interface AppContextType {
   createNewToken: (account: Omit<TokenAccount, 'id' | 'createdAt'>) => Promise<boolean>;
   updateToken: (tokenId: string, updatedFields: Partial<Omit<TokenAccount, 'id'>>) => Promise<boolean>;
   removeToken: (tokenId: string) => Promise<boolean>;
+  sellTokens: (studentId: string, tokens: number, amount: number) => Promise<boolean>;
   
   // Toasts
   addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -72,6 +74,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [staffList, setStaffList] = useState<StaffAccount[]>([]);
   const [tokens, setTokens] = useState<TokenAccount[]>([]);
+  const [tokenTransactions, setTokenTransactions] = useState<TokenTransaction[]>([]);
   const [currentUser, setCurrentUser] = useState<AppContextType['currentUser']>(null);
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
@@ -156,6 +159,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setTokens(updatedTokens);
     });
 
+    // 5. Subscribe to Token Transactions
+    const unsubTransactions = db.subscribeTokenTransactions((updatedTxs) => {
+      setTokenTransactions(updatedTxs);
+    });
+
     // Defer state updates to prevent synchronous setState inside useEffect
     let unsubAuth = () => {};
     const timer = setTimeout(() => {
@@ -219,6 +227,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubOrders();
       unsubStaff();
       unsubTokens();
+      unsubTransactions();
       unsubAuth();
       clearTimeout(timer);
     };
@@ -660,6 +669,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const sellTokens = async (studentId: string, tokensToAdd: number, amountPaid: number): Promise<boolean> => {
+    try {
+      const studentCard = tokens.find(t => t.id === studentId);
+      if (!studentCard) {
+        addToast('Student card not found.', 'error');
+        return false;
+      }
+
+      // Update student's balance globally
+      const newBalance = Math.round((studentCard.tokens + tokensToAdd) * 100) / 100;
+      await db.updateTokenAccount(studentId, {
+        tokens: newBalance
+      });
+
+      // Create Token transaction log
+      await db.addTokenTransaction({
+        studentId,
+        studentName: studentCard.name,
+        cardNo: studentCard.cardNo,
+        tokens: tokensToAdd,
+        amount: amountPaid,
+        soldBy: currentUser?.username || 'unknown'
+      });
+
+      addToast(`Successfully sold ${tokensToAdd} tokens to ${studentCard.name}!`, 'success');
+      return true;
+    } catch (error) {
+      console.error("Failed to sell tokens:", error);
+      addToast('Failed to complete token sale.', 'error');
+      return false;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -667,6 +709,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         orders,
         staffList,
         tokens,
+        tokenTransactions,
         currentUser,
         activeTable,
         tableCarts,
@@ -690,6 +733,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createNewToken,
         updateToken,
         removeToken,
+        sellTokens,
         addToast,
         removeToast,
         confirmAction

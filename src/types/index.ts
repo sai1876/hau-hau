@@ -58,3 +58,14 @@ export interface TokenAccount {
   createdAt: string;
 }
 
+export interface TokenTransaction {
+  id: string;
+  studentId: string;
+  studentName: string;
+  cardNo: string;
+  tokens: number; // Tokens added (positive)
+  amount: number; // Rupees paid (tokens * 30)
+  soldBy: string; // Username/name of the staff who sold it
+  createdAt: string;
+}
+
