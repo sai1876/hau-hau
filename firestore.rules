@@ -1,0 +1,173 @@
+rules_version = '2';
+
+// =============================================================================
+// Hau-Hau POS — Firestore Security Rules
+// =============================================================================
+// These rules are the PRIMARY security layer between clients and Firestore.
+// Because all role checks in the app are currently client-side, these rules
+// provide the server-enforced safety net.
+//
+// Current architecture:
+//   - Firebase Auth UIDs map to documents in the `staff` collection
+//   - The `role` field in that document determines access level
+//
+// ⚠ IMPORTANT LIMITATION:
+//   Role checks below read the caller's staff document to determine their role.
+//   This pattern is correct but has a small risk: if the `role` field in Firestore
+//   is tampered with, a user could elevate their own permissions.
+//   The recommended production fix is to use Firebase Custom Claims via the
+//   Firebase Admin SDK (see SECURITY.md for the recommended path).
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+
+    // Returns true if the request comes from an authenticated Firebase user.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Fetches the caller's staff profile document.
+    function callerProfile() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data;
+    }
+
+    // Returns true if the authenticated user has the 'owner' role.
+    // TODO: Migrate to Firebase Custom Claims for a more tamper-proof check.
+    function isOwner() {
+      return isAuthenticated() && callerProfile().role == 'owner';
+    }
+
+    // Returns true if the authenticated user is an active staff member or owner.
+    function isActiveStaff() {
+      return isAuthenticated() &&
+             callerProfile().status == 'active' &&
+             (callerProfile().role == 'staff' || callerProfile().role == 'owner');
+    }
+
+    // -------------------------------------------------------------------------
+    // `menu` collection
+    // Purpose: Menu items visible on the POS.
+    // -------------------------------------------------------------------------
+    match /menu/{itemId} {
+      // Any active authenticated user can read the menu (for the POS display).
+      allow read: if isActiveStaff();
+
+      // Only the owner can add, edit, or delete menu items.
+      allow create, update, delete: if isOwner();
+    }
+
+    // -------------------------------------------------------------------------
+    // `orders` collection
+    // Purpose: All orders placed by staff.
+    // -------------------------------------------------------------------------
+    match /orders/{orderId} {
+      // Any active staff/owner can read orders.
+      // TODO: Consider restricting staff to only read their own orders (staffId == auth.uid).
+      allow read: if isActiveStaff();
+
+      // Active staff can create new orders.
+      allow create: if isActiveStaff()
+                    && request.resource.data.staffId == request.auth.uid;
+                    // TODO: Enforce staffId must match auth.uid once staffId is migrated
+                    // from username to Firebase Auth UID.
+
+      // Only the owner can update or cancel orders.
+      // Staff should not be able to mark their own orders as complete/cancelled.
+      allow update: if isOwner();
+
+      // Orders should never be deleted — they are the audit trail.
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // `staff` collection
+    // Purpose: Staff profiles and account settings.
+    // -------------------------------------------------------------------------
+    match /staff/{staffId} {
+      // A user can read their own profile; owner can read all profiles.
+      allow read: if isAuthenticated() &&
+                  (request.auth.uid == staffId || isOwner());
+
+      // Only the owner can create new staff profiles.
+      allow create: if isOwner();
+
+      // Owner can update any field. A staff member can only update their own
+      // name and contact — NOT their role, status, or monthlyTokenLimit.
+      allow update: if isOwner() ||
+                    (isAuthenticated() &&
+                     request.auth.uid == staffId &&
+                     // Staff can only change name and emailOrPhone
+                     request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['name', 'emailOrPhone']));
+
+      // Only the owner can delete staff accounts.
+      // TODO: Consider soft-delete (status = 'deleted') to preserve audit history.
+      allow delete: if isOwner();
+    }
+
+    // -------------------------------------------------------------------------
+    // `tokens` collection
+    // Purpose: Student/customer stored-value token accounts.
+    // -------------------------------------------------------------------------
+    match /tokens/{tokenId} {
+      // Any active staff/owner can read token accounts (for POS token payment lookups).
+      allow read: if isActiveStaff();
+
+      // Owner can create new token accounts.
+      // Staff can also create accounts (for issuing new cards).
+      // TODO: Consider restricting staff card creation to only go through a
+      //       Cloud Function that enforces monthly limits server-side.
+      allow create: if isActiveStaff();
+
+      // ⚠ TOKEN BALANCE SECURITY:
+      // Ideally, token balance updates should ONLY be performed by a Cloud Function
+      // that enforces atomic transactions, prevents negative balances, and validates
+      // monthly staff limits server-side.
+      //
+      // Current compromise: allow owner full update; staff can only update the
+      // `tokens` (balance) field — but this is still client-side enforcement.
+      // The monthly limit check in AppContext.tsx is the only guard for staff.
+      //
+      // TODO: Move balance updates to a Cloud Function and restrict this to:
+      //   allow update: if isOwner();
+      allow update: if isOwner() ||
+                    (isActiveStaff() &&
+                     callerProfile().role == 'staff' &&
+                     // Staff can only update the token balance, not name or cardNo
+                     request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['tokens', 'updatedAt']));
+
+      // Only owner can delete token accounts.
+      allow delete: if isOwner();
+    }
+
+    // -------------------------------------------------------------------------
+    // `token_transactions` collection
+    // Purpose: Immutable ledger of all token recharges, deductions, and refunds.
+    // -------------------------------------------------------------------------
+    match /token_transactions/{txId} {
+      // Owner and active staff can read transaction history.
+      allow read: if isActiveStaff();
+
+      // Any active staff/owner can create a transaction record.
+      // Records should be immutable once created.
+      allow create: if isActiveStaff();
+
+      // Transactions must NEVER be modified or deleted — they are the audit trail.
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // All other collections — deny by default
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
