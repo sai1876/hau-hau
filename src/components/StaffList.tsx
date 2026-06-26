@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { StatusBadge } from './StatusBadge';
 
 export function StaffList() {
-  const { staffList, toggleStaff, removeStaff, updateStaffLimit, confirmAction } = useApp();
+  const { staffList, toggleStaff, removeStaff, confirmAction } = useApp();
 
   const handleDelete = (id: string, name: string) => {
     confirmAction(

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { TokenAccount } from '../types';
+import { TokenIcon } from './TokenIcon';
 
 interface TokenAccountFormProps {
   editingToken: TokenAccount | null;
@@ -12,25 +13,22 @@ interface TokenAccountFormProps {
 export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFormProps) {
   const { createNewToken, updateToken } = useApp();
 
-  const [name, setName] = useState('');
-  const [cardNo, setCardNo] = useState('');
-  const [tokensInput, setTokensInput] = useState('');
-  const [rupeesInput, setRupeesInput] = useState('');
+  const [name, setName] = useState(() => editingToken?.name ?? '');
+  const [cardNo, setCardNo] = useState(() => editingToken?.cardNo ?? '');
+  const [tokensInput, setTokensInput] = useState(() => editingToken ? editingToken.tokens.toString() : '');
+  const [rupeesInput, setRupeesInput] = useState(() => editingToken ? (editingToken.tokens * 30).toString() : '');
 
-  // Sync state with editingToken if we are in Edit Mode
-  useEffect(() => {
-    if (editingToken) {
-      setName(editingToken.name);
-      setCardNo(editingToken.cardNo);
-      setTokensInput(editingToken.tokens.toString());
-      setRupeesInput((editingToken.tokens * 30).toString());
-    } else {
-      setName('');
-      setCardNo('');
-      setTokensInput('');
-      setRupeesInput('');
-    }
-  }, [editingToken]);
+  // Track the last seen editingToken.id to detect when the edit target changes
+  const [lastEditId, setLastEditId] = useState<string | null>(() => editingToken?.id ?? null);
+
+  const currentEditId = editingToken?.id ?? null;
+  if (currentEditId !== lastEditId) {
+    setLastEditId(currentEditId);
+    setName(editingToken?.name ?? '');
+    setCardNo(editingToken?.cardNo ?? '');
+    setTokensInput(editingToken ? editingToken.tokens.toString() : '');
+    setRupeesInput(editingToken ? (editingToken.tokens * 30).toString() : '');
+  }
 
   const handleTokensChange = (val: string) => {
     setTokensInput(val);
@@ -58,10 +56,10 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
     e.preventDefault();
     if (!name || !cardNo || !tokensInput) return;
 
-    // Validate card number: must be exactly 3 digits
-    const cardNoPattern = /^\d{3}$/;
+    // Validate card number: must be 3 to 6 numeric digits
+    const cardNoPattern = /^\d{3,6}$/;
     if (!cardNoPattern.test(cardNo.trim())) {
-      alert('Card number must be exactly 3 digits (e.g. 005, 123, 999).');
+      alert('Card number must be 3 to 6 digits (e.g. 005, 10042, 123456).');
       return;
     }
 
@@ -135,7 +133,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
             <span className="text-[8px] uppercase tracking-wider text-white/50 font-bold">Balance</span>
             <div className="flex items-baseline gap-2">
               <span className="text-xl font-mono font-bold text-blue-300">
-                {parseFloat(tokensInput) ? parseFloat(tokensInput).toFixed(2) : '0.00'} <span className="text-xs font-sans font-bold">TK</span>
+                {parseFloat(tokensInput) ? parseFloat(tokensInput).toFixed(2) : '0.00'} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-300" />
               </span>
               <span className="text-[10px] font-mono text-[#71d384] font-bold">
                 ≈ ₹{parseFloat(rupeesInput) ? parseFloat(rupeesInput).toFixed(2) : '0.00'}
@@ -154,7 +152,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
             <div className="flex flex-col text-right shrink-0">
               <span className="text-[8px] uppercase tracking-wider text-white/50 font-bold">Card ID</span>
               <span className="text-xs font-mono font-bold text-blue-300">
-                #{cardNo ? cardNo.padStart(3, '0') : '000'}
+                #{cardNo ? cardNo.padStart(cardNo.length >= 4 ? cardNo.length : 3, '0') : '000'}
               </span>
             </div>
           </div>
@@ -181,19 +179,19 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
         {/* Card Number */}
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-text-muted font-bold">
-            Card Number (3 Digits)
+            Card Number (3–6 Digits)
           </label>
           <input
             type="text"
             required
-            maxLength={3}
-            placeholder="e.g. 001"
+            maxLength={6}
+            placeholder="e.g. 001 or 10042"
             value={cardNo}
             onChange={(e) => setCardNo(e.target.value.replace(/\D/g, ''))} // only allow digits
             className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-text-muted/50 font-mono text-center tracking-widest font-semibold"
           />
           <span className="text-[10px] text-text-muted font-medium">
-            Numeric, unique, and exactly 3 digits.
+            Numeric only, 3–6 digits. Owner decides the card length for this outlet.
           </span>
         </div>
 
@@ -215,8 +213,8 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
                 onChange={(e) => handleTokensChange(e.target.value)}
                 className="minimal-input pl-3.5 pr-8 py-2.5 text-xs text-white placeholder-text-muted/50 font-mono w-full font-semibold"
               />
-              <span className="absolute right-2.5 text-[10px] text-text-muted font-bold uppercase select-none pointer-events-none">
-                TK
+              <span className="absolute right-2.5 flex items-center select-none pointer-events-none">
+                <TokenIcon className="w-3.5 h-3.5 text-text-muted" />
               </span>
             </div>
           </div>

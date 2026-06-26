@@ -10,6 +10,7 @@ import StatusBadge from '@/components/StatusBadge';
 import ProfileSection from '@/components/ProfileSection';
 import TokenAccountForm from '@/components/TokenAccountForm';
 import { TokenAccount } from '@/types';
+import { TokenIcon } from '@/components/TokenIcon';
 
 export default function StaffDashboardPage() {
   const router = useRouter();
@@ -381,7 +382,7 @@ export default function StaffDashboardPage() {
                               </span>
                             </div>
                             <span className="bg-blue-500/10 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-bold text-[10px] font-mono">
-                              {student.tokens.toFixed(2)} TK
+                              {student.tokens.toFixed(2)} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-400" />
                             </span>
                           </button>
                         ))}
@@ -516,8 +517,8 @@ export default function StaffDashboardPage() {
                               onChange={(e) => handleRechargeTokensChange(e.target.value)}
                               className="minimal-input pl-3.5 pr-8 py-2.5 text-xs text-white placeholder-text-muted/30 font-mono w-full"
                             />
-                            <span className="absolute right-2.5 text-[10px] text-text-muted font-bold select-none pointer-events-none">
-                              TK
+                            <span className="absolute right-2.5 flex items-center select-none pointer-events-none">
+                              <TokenIcon className="w-3.5 h-3.5 text-text-muted" />
                             </span>
                           </div>
                         </div>
@@ -626,7 +627,7 @@ export default function StaffDashboardPage() {
               <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
                 <div>
                   <h2 className="text-sm text-foreground font-bold">
-                    Today's Placed Orders
+                    Today&apos;s Placed Orders
                   </h2>
                   <p className="text-xs text-text-muted mt-0.5">Recent orders fulfilled or pending during this shift</p>
                 </div>

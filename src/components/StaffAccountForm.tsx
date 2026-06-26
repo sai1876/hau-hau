@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { TokenIcon } from './TokenIcon';
 
 export function StaffAccountForm() {
   const { createNewStaff } = useApp();
@@ -109,8 +110,8 @@ export function StaffAccountForm() {
               onChange={(e) => setMonthlyTokenLimit(e.target.value)}
               className="minimal-input pl-3.5 pr-8 py-2.5 text-xs text-white placeholder-text-muted/50 font-mono w-full font-semibold"
             />
-            <span className="absolute right-2.5 text-[10px] text-text-muted font-bold uppercase select-none pointer-events-none">
-              TK
+            <span className="absolute right-2.5 flex items-center select-none pointer-events-none">
+              <TokenIcon className="w-3.5 h-3.5 text-text-muted" />
             </span>
           </div>
         </div>

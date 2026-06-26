@@ -12,6 +12,7 @@ import TokenList from '@/components/TokenList';
 import TokenAccountForm from '@/components/TokenAccountForm';
 import ProfileSection from '@/components/ProfileSection';
 import { Order, MenuItem, TokenAccount, StaffAccount } from '@/types';
+import { TokenIcon } from '@/components/TokenIcon';
 
 export default function OwnerDashboardPage() {
   const router = useRouter();
@@ -556,14 +557,14 @@ export default function OwnerDashboardPage() {
                 <div className="minimal-card p-6 rounded-xl bg-surface border border-border flex flex-col justify-between relative overflow-hidden">
                   <div className="absolute -right-20 -top-20 w-44 h-44 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
                   <div>
-                    <span className="text-[10px] text-text-muted font-bold block uppercase tracking-wider">Today's Revenue</span>
+                    <span className="text-[10px] text-text-muted font-bold block uppercase tracking-wider">Today&apos;s Revenue</span>
                     <span className="text-4xl font-extrabold text-foreground font-mono mt-3 block leading-tight">
                       ₹{totalCollections.toFixed(2)}
                     </span>
                     <p className="text-xs text-text-muted mt-2 leading-relaxed">Combine of cash, online, and token card transactions logged today.</p>
                   </div>
                   <div className="border-t border-border pt-4 mt-6 flex justify-between items-center text-xs">
-                    <span className="text-text-muted font-semibold">Today's Total Orders</span>
+                    <span className="text-text-muted font-semibold">Today&apos;s Total Orders</span>
                     <span className="font-bold text-foreground font-mono">{totalOrders} orders</span>
                   </div>
                 </div>
@@ -966,7 +967,7 @@ export default function OwnerDashboardPage() {
                                 <span className="text-[10px] text-text-muted font-bold">Monthly Usage</span>
                                 <span className={`text-xs font-mono font-bold ${
                                   isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-foreground'
-                                }`}>{tokensSoldThisMonth.toFixed(0)} / {limit} TK</span>
+                                }`}>{tokensSoldThisMonth.toFixed(0)} / {limit} <TokenIcon className="ml-1 w-3.5 h-3.5" /></span>
                               </div>
                               <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden border border-border">
                                 <div
@@ -990,7 +991,7 @@ export default function OwnerDashboardPage() {
                               <div className="bg-surface-container/40 border border-border rounded-lg p-2.5 flex flex-col gap-0.5">
                                 <span className="text-[9px] text-text-muted font-bold">All-Time</span>
                                 <span className="text-sm font-bold font-mono text-primary">{tokensSoldAllTime.toFixed(0)}</span>
-                                <span className="text-[9px] text-text-muted">TK sold</span>
+                                <span className="text-[9px] text-text-muted font-medium">tokens sold</span>
                               </div>
                             </div>
 
@@ -1240,7 +1241,7 @@ export default function OwnerDashboardPage() {
                 <div className="bg-surface-container/40 border border-border rounded-xl p-4 flex flex-col gap-3">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-text-muted font-bold">Monthly Usage</span>
-                    <span className={`text-xs font-mono font-bold ${isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-foreground'}`}>{tokensSoldThisMonth.toFixed(0)} / {limit} TK ({usagePct.toFixed(0)}%)</span>
+                    <span className={`text-xs font-mono font-bold flex items-center gap-1 ${isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-foreground'}`}>{tokensSoldThisMonth.toFixed(0)} / {limit} <TokenIcon className="w-3.5 h-3.5" /> ({usagePct.toFixed(0)}%)</span>
                   </div>
                   <div className="h-2.5 w-full bg-surface-container rounded-full overflow-hidden border border-border">
                     <div style={{ width: `${usagePct}%` }} className={`h-full rounded-full transition-all duration-700 ${isOverLimit ? 'bg-error' : isNearLimit ? 'bg-warning' : 'bg-primary'}`} />
@@ -1258,7 +1259,7 @@ export default function OwnerDashboardPage() {
                       <label className="text-[9px] text-text-muted font-bold">Limit (tokens / month)</label>
                       <div className="relative flex items-center">
                         <input type="number" min="0" value={editingLimitValue} onChange={(e) => setEditingLimitValue(e.target.value)} className="minimal-input w-full px-3.5 py-2.5 text-sm font-mono text-white pr-10 focus:border-border-focus" />
-                        <span className="absolute right-3 text-[10px] text-text-muted font-bold select-none pointer-events-none">TK</span>
+                        <span className="absolute right-3 flex items-center select-none pointer-events-none"><TokenIcon className="w-3.5 h-3.5 text-text-muted" /></span>
                       </div>
                     </div>
                     <button
@@ -1272,7 +1273,7 @@ export default function OwnerDashboardPage() {
                       Save Limit
                     </button>
                   </div>
-                  <div className="text-[10px] text-text-muted font-semibold">Current: <span className="font-mono font-bold text-foreground">{limit} TK/month</span> &middot; ≈ ₹{(limit * 30).toFixed(0)} cap</div>
+                  <div className="text-[10px] text-text-muted font-semibold flex items-center gap-1">Current: <span className="font-mono font-bold text-foreground inline-flex items-center gap-1">{limit} <TokenIcon className="w-3 h-3" />/month</span> &middot; ≈ ₹{(limit * 30).toFixed(0)} cap</div>
                 </div>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">

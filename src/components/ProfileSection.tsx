@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import StatusBadge from './StatusBadge';
+import { TokenIcon } from './TokenIcon';
 
 export function ProfileSection() {
   const { currentUser, staffList, orders, tokenTransactions, updateProfile } = useApp();
@@ -8,37 +9,24 @@ export function ProfileSection() {
   // Find the full database details of the logged-in user
   const dbUser = staffList.find(s => s.username === currentUser?.username);
 
-  // Form states
-  const [name, setName] = useState('');
-  const [emailOrPhone, setEmailOrPhone] = useState('');
+  // Form states — initialized directly from data source
+  const defaultName = dbUser?.name ?? currentUser?.name ?? '';
+  const defaultEmail = dbUser?.emailOrPhone ?? '';
+
+  const [name, setName] = useState(defaultName);
+  const [emailOrPhone, setEmailOrPhone] = useState(defaultEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
   // UI states
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState({
-    length: false,
-    match: false,
-  });
 
-  // Prepopulate form when dbUser is loaded
-  useEffect(() => {
-    if (dbUser) {
-      setName(dbUser.name);
-      setEmailOrPhone(dbUser.emailOrPhone);
-    } else if (currentUser) {
-      setName(currentUser.name);
-    }
-  }, [dbUser, currentUser]);
-
-  // Track password strength & validation
-  useEffect(() => {
-    setPasswordStrength({
-      length: password.length >= 6,
-      match: password.length > 0 && password === confirmPassword,
-    });
-  }, [password, confirmPassword]);
+  // Password strength is purely derived — computed via useMemo, not setState-in-effect
+  const passwordStrength = useMemo(() => ({
+    length: password.length >= 6,
+    match: password.length > 0 && password === confirmPassword,
+  }), [password, confirmPassword]);
 
   if (!currentUser) return null;
 
@@ -262,7 +250,7 @@ export function ProfileSection() {
               </div>
               <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
                 <span className="text-xs text-text-muted font-semibold">Tokens Dispensed</span>
-                <span className="block font-mono font-bold text-base text-blue-400 mt-1">{staffTokensSold.toFixed(2)} TK</span>
+                <span className="block font-mono font-bold text-base text-blue-400 mt-1">{staffTokensSold.toFixed(2)} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-400" /></span>
               </div>
               <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
                 <span className="text-xs text-text-muted font-semibold">Token Revenue</span>

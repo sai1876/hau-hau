@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { TokenAccount } from '../types';
+import { TokenIcon } from './TokenIcon';
 
 interface TokenListProps {
   onStartEdit: (token: TokenAccount) => void;
@@ -97,7 +98,7 @@ export function TokenList({ onStartEdit, onViewHistory }: TokenListProps) {
                   <td className="p-3.5 font-bold text-foreground">{token.name}</td>
                   <td className="p-3.5 text-foreground font-mono">
                     <span className="bg-blue-500/10 text-blue-450 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-bold text-[10px]">
-                      {token.tokens.toFixed(2)} TK
+                      {token.tokens.toFixed(2)} <TokenIcon className="ml-1 w-3.5 h-3.5 text-amber-550" />
                     </span>
                   </td>
                   <td className="p-3.5 text-text-muted font-mono">

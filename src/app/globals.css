@@ -321,3 +321,13 @@ body {
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* Hide spin buttons in WebKit and Firefox browsers for number inputs */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { TokenIcon } from './TokenIcon';
 
 interface CartPanelProps {
   onClose?: () => void;
@@ -216,7 +217,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
               </div>
               <div className="flex justify-between items-center font-mono text-xs">
                 <span className="text-text-muted font-sans text-[11px]">Tokens Required:</span>
-                <span className="text-blue-400 font-bold text-sm">{requiredTokens} TK</span>
+                <span className="text-blue-400 font-bold text-sm">{requiredTokens} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-400" /></span>
               </div>
             </div>
           )}
