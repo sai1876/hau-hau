@@ -131,7 +131,18 @@ const DEFAULT_STAFF: StaffAccount[] = [
     emailOrPhone: 'alex@hauhau.com',
     username: 'staff',
     password: 'staff',
-    status: 'active'
+    status: 'active',
+    role: 'staff',
+    monthlyTokenLimit: 1000
+  },
+  {
+    id: 'owner_default',
+    name: 'Sarah (Owner)',
+    emailOrPhone: 'owner@hauhau.com',
+    username: 'owner',
+    password: 'owner123',
+    status: 'active',
+    role: 'owner'
   }
 ];
 
@@ -634,6 +645,29 @@ export const db = {
       const staff = localStorage.getItem(STAFF_KEY);
       const list: StaffAccount[] = staff ? JSON.parse(staff) : DEFAULT_STAFF;
       const updated = list.filter(s => s.id !== staffId);
+      localStorage.setItem(STAFF_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+    }
+  },
+
+  async updateStaffAccount(staffId: string, updatedFields: Partial<Omit<StaffAccount, 'id'>>): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
+    if (isFirebaseConfigured()) {
+      try {
+        await updateDoc(doc(firestore, 'staff', staffId), updatedFields);
+      } catch (error) {
+        console.error("Firestore updateStaffAccount failed, falling back to LocalStorage:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+
+    if (useLocal) {
+      const staff = localStorage.getItem(STAFF_KEY);
+      const list: StaffAccount[] = staff ? JSON.parse(staff) : DEFAULT_STAFF;
+      const updated = list.map(s => 
+        s.id === staffId ? { ...s, ...updatedFields } : s
+      );
       localStorage.setItem(STAFF_KEY, JSON.stringify(updated));
       window.dispatchEvent(new Event('storage'));
     }

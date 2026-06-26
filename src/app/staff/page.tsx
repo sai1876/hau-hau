@@ -7,6 +7,8 @@ import TableSelector from '@/components/TableSelector';
 import MenuItemCard from '@/components/MenuItemCard';
 import CartPanel from '@/components/CartPanel';
 import StatusBadge from '@/components/StatusBadge';
+import ProfileSection from '@/components/ProfileSection';
+import TokenAccountForm from '@/components/TokenAccountForm';
 import { TokenAccount } from '@/types';
 
 export default function StaffDashboardPage() {
@@ -20,10 +22,11 @@ export default function StaffDashboardPage() {
     tableCarts,
     tokens,
     tokenTransactions,
+    staffList,
     sellTokens
   } = useApp();
 
-  const [activeWorkspace, setActiveWorkspace] = useState<'pos' | 'tokens'>('pos');
+  const [activeWorkspace, setActiveWorkspace] = useState<'pos' | 'tokens' | 'profile'>('pos');
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
@@ -139,6 +142,21 @@ export default function StaffDashboardPage() {
   const shiftTokensSold = shiftTransactions.reduce((sum, tx) => sum + tx.tokens, 0);
   const shiftRupeesCollected = shiftTransactions.reduce((sum, tx) => sum + tx.amount, 0);
 
+  // Monthly purse calculation
+  const staffProfile = staffList.find(s => s.username === currentUser.username);
+  const monthlyLimit = staffProfile?.monthlyTokenLimit ?? 1000;
+  const now = new Date();
+  const currentMonthTxs = tokenTransactions.filter(tx => {
+    if (tx.soldBy !== currentUser.username) return false;
+    const d = new Date(tx.createdAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+  const monthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
+  const monthlyRemaining = Math.max(0, monthlyLimit - monthTokensSold);
+  const monthlyUsagePct = monthlyLimit > 0 ? Math.min(100, (monthTokensSold / monthlyLimit) * 100) : 0;
+  const isPurseNearLimit = monthlyUsagePct >= 80;
+  const isPurseOverLimit = monthlyUsagePct >= 100;
+
   return (
     <div className="flex-1 flex flex-col bg-zinc-950 min-h-screen pb-16 md:pb-0">
       
@@ -156,10 +174,17 @@ export default function StaffDashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:flex flex-col">
-              <span className="text-xs font-semibold text-zinc-200">{currentUser.name}</span>
-              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold mt-0.5">Floor Staff</span>
-            </div>
+            <button
+              onClick={() => setActiveWorkspace('profile')}
+              className="text-right hidden sm:flex flex-col group cursor-pointer active:scale-95 transition-transform"
+            >
+              <span className="text-xs font-semibold text-zinc-200 group-hover:text-orange-400 transition-colors">
+                {currentUser.name}
+              </span>
+              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold mt-0.5 group-hover:text-orange-500/80 transition-colors">
+                Floor Staff ⚙
+              </span>
+            </button>
             <button
               onClick={logout}
               className="minimal-btn-secondary text-[10px] uppercase font-bold px-3 py-1.5 rounded-sm cursor-pointer active:scale-95 transition-transform"
@@ -209,18 +234,18 @@ export default function StaffDashboardPage() {
               {/* Menu Column */}
               <div className="lg:col-span-3 flex flex-col gap-4">
                 {/* Categories & Add Item Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/3 pb-3">
-                  <div className="flex gap-2 overflow-x-auto pb-1 flex-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-3.5">
+                  <div className="flex gap-2.5 overflow-x-auto pb-1.5 flex-1">
                     {categories.map((cat) => {
                       const isSelected = activeCategory === cat;
                       return (
                         <button
                           key={cat}
                           onClick={() => setActiveCategory(cat)}
-                          className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase border transition-all cursor-pointer whitespace-nowrap ${
+                          className={`px-4.5 py-2 rounded-full text-[10px] font-extrabold uppercase border transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
                             isSelected 
-                              ? 'bg-white border-white text-zinc-950 font-bold'
-                              : 'bg-zinc-900/20 border-white/3 text-zinc-400 hover:text-zinc-200 hover:border-white/8'
+                              ? 'bg-gradient-to-r from-orange-500 to-rose-500 border-transparent text-white font-extrabold shadow-[0_4px_12px_rgba(249,115,22,0.15)]'
+                              : 'bg-zinc-900/40 border-white/4 text-zinc-400 hover:text-zinc-200 hover:border-white/8 hover:bg-zinc-900/60'
                           }`}
                         >
                           {cat}
@@ -284,6 +309,55 @@ export default function StaffDashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-in">
             {/* Left Column: Search & Profile & Transactions */}
             <div className="lg:col-span-2 flex flex-col gap-6">
+
+              {/* Monthly Purse Card */}
+              <div className="minimal-card p-5 rounded-xl relative overflow-hidden">
+                <div className="absolute -right-10 -top-10 w-28 h-28 bg-blue-500/5 rounded-full blur-xl pointer-events-none" />
+                <div className="flex items-start justify-between mb-4 relative z-10">
+                  <div>
+                    <span className="text-[9px] uppercase font-extrabold tracking-widest text-zinc-500 block">My Monthly Token Purse</span>
+                    <span className="text-[10px] text-zinc-600 mt-0.5 block">Token sales quota for {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
+                  </div>
+                  <div className={`text-[8px] px-2.5 py-1 rounded-full font-black uppercase border ${
+                    isPurseOverLimit ? 'bg-red-500/10 text-red-400 border-red-500/20' : isPurseNearLimit ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  }`}>
+                    {isPurseOverLimit ? 'Limit Reached' : isPurseNearLimit ? 'Near Limit' : 'Available'}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mb-4 relative z-10">
+                  <div className="bg-zinc-950/60 border border-white/5 rounded-xl p-3 flex flex-col gap-1">
+                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">Remaining</span>
+                    <span className={`text-2xl font-black font-mono ${isPurseOverLimit ? 'text-red-400' : isPurseNearLimit ? 'text-amber-400' : 'text-blue-400'}`}>{monthlyRemaining.toFixed(0)}</span>
+                    <span className="text-[8px] text-zinc-600">tokens left</span>
+                  </div>
+                  <div className="bg-zinc-950/60 border border-white/5 rounded-xl p-3 flex flex-col gap-1">
+                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">Used</span>
+                    <span className="text-2xl font-black font-mono text-zinc-300">{monthTokensSold.toFixed(0)}</span>
+                    <span className="text-[8px] text-zinc-600">tokens sold</span>
+                  </div>
+                  <div className="bg-zinc-950/60 border border-white/5 rounded-xl p-3 flex flex-col gap-1">
+                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">Monthly Cap</span>
+                    <span className="text-2xl font-black font-mono text-zinc-400">{monthlyLimit}</span>
+                    <span className="text-[8px] text-zinc-600">token limit</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5 relative z-10">
+                  <div className="flex justify-between">
+                    <span className="text-[8px] uppercase text-zinc-600 font-bold">Usage</span>
+                    <span className={`text-[9px] font-mono font-bold ${isPurseOverLimit ? 'text-red-400' : isPurseNearLimit ? 'text-amber-400' : 'text-zinc-400'}`}>{monthlyUsagePct.toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                    <div
+                      style={{ width: `${monthlyUsagePct}%` }}
+                      className={`h-full rounded-full transition-all duration-700 ${
+                        isPurseOverLimit ? 'bg-gradient-to-r from-red-500 to-red-600' : isPurseNearLimit ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-blue-400 to-indigo-500'
+                      }`}
+                    />
+                  </div>
+                  {isPurseOverLimit && <p className="text-[9px] text-red-400 font-bold">&#9888; Monthly limit reached. Token sales are blocked until next month or the owner raises your limit.</p>}
+                  {isPurseNearLimit && !isPurseOverLimit && <p className="text-[9px] text-amber-400 font-bold">&#9888; You are close to your monthly limit. Contact the owner to increase it if needed.</p>}
+                </div>
+              </div>
               {/* Search Panel */}
               <div className="minimal-card p-5 rounded-md flex flex-col gap-4">
                 <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
@@ -302,7 +376,7 @@ export default function StaffDashboardPage() {
 
                 {/* Search Results Dropdown/List */}
                 {studentSearchQuery && searchedStudents.length > 0 && (
-                  <div className="border border-white/5 rounded-sm bg-zinc-950/60 divide-y divide-white/2 max-h-48 overflow-y-auto mt-2">
+                  <div className="border border-white/5 rounded-lg bg-zinc-950/80 backdrop-blur-md divide-y divide-white/2 max-h-48 overflow-y-auto mt-2 shadow-xl animate-fade-in relative z-20">
                     {searchedStudents.map(student => (
                       <button
                         key={student.id}
@@ -312,14 +386,16 @@ export default function StaffDashboardPage() {
                           setRechargeTokens('');
                           setRechargeAmount('');
                         }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-white/5 transition-colors flex justify-between items-center text-xs cursor-pointer"
+                        className="w-full text-left px-4.5 py-3 hover:bg-white/5 transition-colors flex justify-between items-center text-xs cursor-pointer"
                       >
-                        <div>
-                          <span className="font-bold text-zinc-200">{student.name}</span>
-                          <span className="text-[10px] text-zinc-500 ml-2">Card: #{student.cardNo}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-zinc-200">{student.name}</span>
+                          <span className="text-[9px] font-mono text-zinc-550 font-bold bg-zinc-900 border border-white/4 px-1.5 py-0.2 rounded">
+                            #{student.cardNo}
+                          </span>
                         </div>
-                        <span className="bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-sm border border-blue-500/20 font-bold text-[10px]">
-                          {student.tokens} tokens
+                        <span className="bg-blue-500/10 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-black text-[9px] font-mono">
+                          {student.tokens.toFixed(2)} TK
                         </span>
                       </button>
                     ))}
@@ -341,7 +417,15 @@ export default function StaffDashboardPage() {
                       <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Student Profile</span>
                       <span className="text-sm font-bold text-white mt-0.5">{selectedStudent.name}</span>
                     </div>
-                    <span className="text-xs font-mono font-bold text-blue-400">Card #{selectedStudent.cardNo}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono font-bold text-blue-400">Card #{selectedStudent.cardNo}</span>
+                      <button
+                        onClick={() => setSelectedStudent(null)}
+                        className="text-[9px] text-zinc-500 hover:text-orange-450 uppercase font-extrabold tracking-widest cursor-pointer"
+                      >
+                        ✕ Clear Selection
+                      </button>
+                    </div>
                   </div>
 
                   <div className="p-5 flex flex-col gap-6">
@@ -418,7 +502,7 @@ export default function StaffDashboardPage() {
             {/* Right Column: Sell Tokens Form & Shift Sales Summary */}
             <div className="flex flex-col gap-6">
               {/* Sell Tokens Form */}
-              {selectedStudent && (
+              {selectedStudent ? (
                 <div className="minimal-card rounded-md overflow-hidden flex flex-col">
                   <div className="bg-zinc-950/80 px-4 py-3 border-b border-white/3">
                     <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
@@ -484,6 +568,11 @@ export default function StaffDashboardPage() {
                     </button>
                   </form>
                 </div>
+              ) : (
+                <TokenAccountForm
+                  editingToken={null}
+                  onCancelEdit={() => {}}
+                />
               )}
 
               {/* Shift Token Sales Summary */}
@@ -510,6 +599,11 @@ export default function StaffDashboardPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* 3. PROFILE WORKSPACE */}
+        {activeWorkspace === 'profile' && (
+          <ProfileSection />
         )}
       </main>
 

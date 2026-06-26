@@ -9,9 +9,10 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   createUserWithEmailAndPassword, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  updatePassword
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
@@ -29,6 +30,7 @@ interface AppContextType {
   // Auth actions
   login: (username: string, password?: string, bypassAuth?: boolean) => Promise<boolean>;
   logout: () => void;
+  updateProfile: (updatedFields: { name?: string; password?: string; emailOrPhone?: string }) => Promise<boolean>;
   
   // Staff actions
   selectActiveTable: (table: string | null) => void;
@@ -44,6 +46,7 @@ interface AppContextType {
   createNewStaff: (account: Omit<StaffAccount, 'id' | 'status'>) => Promise<boolean>;
   toggleStaff: (staffId: string) => void;
   removeStaff: (staffId: string) => void;
+  updateStaffLimit: (staffId: string, limit: number) => Promise<boolean>;
   
   // Menu Item Management
   createNewMenuItem: (item: Omit<MenuItem, 'id' | 'available'>) => Promise<MenuItem | null>;
@@ -317,6 +320,84 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActiveTable(null);
     addToast('Logged out successfully.', 'info');
     router.push('/login');
+  };
+
+  const updateProfile = async (updatedFields: { name?: string; password?: string; emailOrPhone?: string }): Promise<boolean> => {
+    if (!currentUser) {
+      addToast('No user logged in.', 'error');
+      return false;
+    }
+
+    if (db.isFirebaseConfigured()) {
+      try {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser) {
+          addToast('Firebase authentication session not found.', 'error');
+          return false;
+        }
+
+        if (updatedFields.password) {
+          try {
+            await updatePassword(firebaseUser, updatedFields.password);
+          } catch (passErr: any) {
+            console.error("Firebase Auth password update failed:", passErr);
+            if (passErr.code === 'auth/requires-recent-login') {
+              addToast('Security check: please re-login to change password.', 'error');
+            } else {
+              addToast(passErr.message || 'Failed to update password in auth system.', 'error');
+            }
+            return false;
+          }
+        }
+
+        const userDocRef = doc(firestore, 'staff', firebaseUser.uid);
+        const firestoreFields: any = {};
+        if (updatedFields.name) firestoreFields.name = updatedFields.name;
+        if (updatedFields.emailOrPhone) firestoreFields.emailOrPhone = updatedFields.emailOrPhone;
+        if (updatedFields.password) firestoreFields.password = updatedFields.password;
+
+        await updateDoc(userDocRef, firestoreFields);
+
+        setCurrentUser(prev => prev ? {
+          ...prev,
+          name: updatedFields.name || prev.name
+        } : null);
+
+        addToast('Profile updated successfully!', 'success');
+        return true;
+      } catch (err: any) {
+        console.error("Profile update failed:", err);
+        addToast(err.message || 'Failed to update profile.', 'error');
+        return false;
+      }
+    } else {
+      const dbUser = staffList.find(s => s.username === currentUser.username);
+      if (!dbUser) {
+        addToast('Profile account not found in database.', 'error');
+        return false;
+      }
+
+      await db.updateStaffAccount(dbUser.id, {
+        name: updatedFields.name,
+        emailOrPhone: updatedFields.emailOrPhone,
+        password: updatedFields.password
+      });
+
+      setCurrentUser(prev => prev ? {
+        ...prev,
+        name: updatedFields.name || prev.name
+      } : null);
+
+      const saved = localStorage.getItem('hau_hau_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        parsed.name = updatedFields.name || parsed.name;
+        localStorage.setItem('hau_hau_session', JSON.stringify(parsed));
+      }
+
+      addToast('Profile updated successfully!', 'success');
+      return true;
+    }
   };
 
   // Cart Operations
@@ -607,8 +688,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
+    // Staff monthly limit check
+    if (currentUser?.role === 'staff') {
+      const staffProfile = staffList.find(s => s.username === currentUser.username);
+      const limit = staffProfile?.monthlyTokenLimit ?? 1005; // default fallback if missing
+      
+      const now = new Date();
+      const currentMonthTxs = tokenTransactions.filter(tx => {
+        if (tx.soldBy !== currentUser.username) return false;
+        const txDate = new Date(tx.createdAt);
+        return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+      });
+      const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
+
+      if (currentMonthTokensSold + account.tokens > limit) {
+        addToast(`Provision exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(2)} TK`, 'error');
+        return false;
+      }
+    }
+
     try {
-      await db.addTokenAccount(account);
+      const createdCard = await db.addTokenAccount(account);
+      // Log transaction if card was initialized with tokens
+      if (account.tokens > 0) {
+        await db.addTokenTransaction({
+          studentId: createdCard.id,
+          studentName: createdCard.name,
+          cardNo: createdCard.cardNo,
+          tokens: account.tokens,
+          amount: account.tokens * 30,
+          soldBy: currentUser?.username || 'unknown'
+        });
+      }
       addToast(`Token card for ${account.name} created!`, 'success');
       return true;
     } catch {
@@ -649,6 +760,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const sellTokens = async (studentId: string, tokensToAdd: number, amountPaid: number): Promise<boolean> => {
+    // Staff monthly limit check
+    if (currentUser?.role === 'staff') {
+      const staffProfile = staffList.find(s => s.username === currentUser.username);
+      const limit = staffProfile?.monthlyTokenLimit ?? 1000;
+      
+      const now = new Date();
+      const currentMonthTxs = tokenTransactions.filter(tx => {
+        if (tx.soldBy !== currentUser.username) return false;
+        const txDate = new Date(tx.createdAt);
+        return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+      });
+      const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
+
+      if (currentMonthTokensSold + tokensToAdd > limit) {
+        addToast(`Sale exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(2)} TK`, 'error');
+        return false;
+      }
+    }
+
     try {
       const studentCard = tokens.find(t => t.id === studentId);
       if (!studentCard) {
@@ -681,6 +811,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateStaffLimit = async (staffId: string, limit: number): Promise<boolean> => {
+    try {
+      await db.updateStaffAccount(staffId, { monthlyTokenLimit: limit });
+      addToast('Staff monthly token limit updated successfully!', 'success');
+      return true;
+    } catch (err) {
+      console.error("Failed to update staff limit:", err);
+      addToast('Failed to update staff limit.', 'error');
+      return false;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -695,6 +837,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toasts,
         login,
         logout,
+        updateProfile,
         selectActiveTable,
         addToCart,
         updateCartQuantity,
@@ -706,6 +849,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createNewStaff,
         toggleStaff,
         removeStaff,
+        updateStaffLimit,
         createNewMenuItem,
         removeMenuItem,
         updateMenuItem,

@@ -10,7 +10,8 @@ import StaffList from '@/components/StaffList';
 import StaffAccountForm from '@/components/StaffAccountForm';
 import TokenList from '@/components/TokenList';
 import TokenAccountForm from '@/components/TokenAccountForm';
-import { Order, MenuItem, TokenAccount } from '@/types';
+import ProfileSection from '@/components/ProfileSection';
+import { Order, MenuItem, TokenAccount, StaffAccount } from '@/types';
 
 export default function OwnerDashboardPage() {
   const router = useRouter();
@@ -26,15 +27,18 @@ export default function OwnerDashboardPage() {
     updateMenuItem,
     confirmAction,
     tokenTransactions,
-    staffList
+    staffList,
+    updateStaffLimit
   } = useApp();
 
   // Navigation Tabs for Command Center
-  const [activeWorkspace, setActiveWorkspace] = useState<'orders' | 'menu' | 'staff' | 'tokens'>('orders');
+  const [activeWorkspace, setActiveWorkspace] = useState<'orders' | 'menu' | 'staff' | 'tokens' | 'profile'>('orders');
   const [activeOrderTab, setActiveOrderTab] = useState<'pending' | 'completed' | 'all'>('pending');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingToken, setEditingToken] = useState<TokenAccount | null>(null);
   const [historyToken, setHistoryToken] = useState<TokenAccount | null>(null);
+  const [selectedStaffDetail, setSelectedStaffDetail] = useState<StaffAccount | null>(null);
+  const [editingLimitValue, setEditingLimitValue] = useState<string>('');
 
   // Form state for creating menu item
   const [itemName, setItemName] = useState('');
@@ -224,54 +228,83 @@ export default function OwnerDashboardPage() {
     const tokenPct = (tokenCollection / totalCollections) * 100;
 
     return (
-      <div className="minimal-card p-5 rounded-md flex flex-col gap-3">
-        <div className="flex justify-between items-center">
-          <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-400">
+      <div className="minimal-card p-5.5 rounded-xl flex flex-col gap-4 relative overflow-hidden">
+        <div className="absolute -right-12 -top-12 w-24 h-24 bg-orange-500/5 rounded-full blur-xl pointer-events-none" />
+
+        <div className="flex justify-between items-center relative z-10">
+          <span className="text-[10px] uppercase font-extrabold tracking-widest text-zinc-400 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
             Revenue Split Distribution
           </span>
-          <span className="text-[10px] font-mono font-bold text-zinc-400">
-            Total Yield: ₹{totalCollections.toFixed(2)}
+          <span className="text-xs font-mono font-black text-zinc-200 bg-zinc-950 px-3 py-1 rounded-md border border-white/5">
+            Total Yield: <span className="text-orange-400 ml-1">₹{totalCollections.toFixed(2)}</span>
           </span>
         </div>
 
         {/* Stacked distribution bar */}
-        <div className="h-3 w-full bg-zinc-950 rounded-sm overflow-hidden flex border border-white/3">
+        <div className="h-4.5 w-full bg-zinc-950 rounded-full overflow-hidden flex border border-white/5 p-[2px] shadow-inner relative z-10">
           {cashCollection > 0 && (
             <div 
               style={{ width: `${cashPct}%` }} 
-              className="bg-amber-500 h-full transition-all duration-500" 
+              className="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-l-full transition-all duration-500" 
               title={`Cash: ${cashPct.toFixed(1)}%`}
             />
           )}
           {onlineCollection > 0 && (
             <div 
               style={{ width: `${onlinePct}%` }} 
-              className="bg-emerald-500 h-full transition-all duration-500" 
+              className="bg-gradient-to-r from-emerald-400 to-teal-500 h-full transition-all duration-500" 
               title={`Online: ${onlinePct.toFixed(1)}%`}
             />
           )}
           {tokenCollection > 0 && (
             <div 
               style={{ width: `${tokenPct}%` }} 
-              className="bg-blue-500 h-full transition-all duration-500" 
+              className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-r-full transition-all duration-500" 
               title={`Tokens: ${tokenPct.toFixed(1)}%`}
             />
           )}
         </div>
 
         {/* Legend */}
-        <div className="grid grid-cols-3 gap-2 mt-1 text-[10px]">
-          <div className="flex items-center gap-1.5 font-medium text-zinc-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>Cash: {cashPct.toFixed(0)}% (₹{cashCollection.toFixed(2)})</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-1 text-[11px] relative z-10">
+          <div className="flex items-center justify-between p-2.5 bg-zinc-950/40 border border-white/3 rounded-lg hover:border-amber-500/10 transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-br from-amber-400 to-orange-500" />
+              <span className="font-extrabold text-zinc-400">Cash Pool</span>
+            </div>
+            <div className="flex items-center gap-2 font-mono">
+              <span className="text-orange-400 font-extrabold">₹{cashCollection.toFixed(2)}</span>
+              <span className="bg-orange-500/10 text-orange-400 text-[9px] px-2 py-0.5 rounded-full border border-orange-500/20 font-black">
+                {cashPct.toFixed(0)}%
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 font-medium text-zinc-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span>Online: {onlinePct.toFixed(0)}% (₹{onlineCollection.toFixed(2)})</span>
+
+          <div className="flex items-center justify-between p-2.5 bg-zinc-950/40 border border-white/3 rounded-lg hover:border-emerald-500/10 transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-br from-emerald-400 to-teal-500" />
+              <span className="font-extrabold text-zinc-400">Online Pool</span>
+            </div>
+            <div className="flex items-center gap-2 font-mono">
+              <span className="text-emerald-400 font-extrabold">₹{onlineCollection.toFixed(2)}</span>
+              <span className="bg-emerald-500/10 text-emerald-400 text-[9px] px-2 py-0.5 rounded-full border border-emerald-500/20 font-black">
+                {onlinePct.toFixed(0)}%
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 font-medium text-zinc-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            <span>Tokens: {tokenPct.toFixed(0)}% (₹{tokenCollection.toFixed(2)})</span>
+
+          <div className="flex items-center justify-between p-2.5 bg-zinc-950/40 border border-white/3 rounded-lg hover:border-blue-500/10 transition-colors">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-sm bg-gradient-to-br from-blue-400 to-indigo-500" />
+              <span className="font-extrabold text-zinc-400">Tokens Pool</span>
+            </div>
+            <div className="flex items-center gap-2 font-mono">
+              <span className="text-blue-400 font-extrabold">₹{tokenCollection.toFixed(2)}</span>
+              <span className="bg-blue-500/10 text-blue-450 text-[9px] px-2 py-0.5 rounded-full border border-blue-500/20 font-black">
+                {tokenPct.toFixed(0)}%
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -295,10 +328,17 @@ export default function OwnerDashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:flex flex-col">
-              <span className="text-xs font-semibold text-zinc-200">Sarah</span>
-              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold mt-0.5">Owner</span>
-            </div>
+            <button
+              onClick={() => setActiveWorkspace('profile')}
+              className="text-right hidden sm:flex flex-col group cursor-pointer active:scale-95 transition-transform"
+            >
+              <span className="text-xs font-semibold text-zinc-200 group-hover:text-orange-400 transition-colors">
+                {currentUser?.name || 'Sarah'}
+              </span>
+              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold mt-0.5 group-hover:text-orange-500/80 transition-colors">
+                Owner ⚙
+              </span>
+            </button>
             <button
               onClick={logout}
               className="minimal-btn-secondary text-[10px] uppercase font-bold px-3 py-1.5 rounded-sm cursor-pointer active:scale-95 transition-transform"
@@ -323,7 +363,7 @@ export default function OwnerDashboardPage() {
         </section>
 
         {/* Global Workspace Nav Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 border-b border-white/3">
           {(['orders', 'menu', 'staff', 'tokens'] as const).map((space) => {
             const isSelected = activeWorkspace === space;
             return (
@@ -717,36 +757,118 @@ export default function OwnerDashboardPage() {
                 </div>
               </div>
 
-              {/* Token Sales Summary Table */}
+              {/* Token Sales Summary Table — Dynamic & Interactive */}
               <div className="minimal-card rounded-md overflow-hidden">
                 <div className="bg-zinc-950/85 px-4 py-3 border-b border-white/3 flex justify-between items-center">
-                  <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
-                    Token Sales Summary by Staff Member
-                  </h3>
+                  <div className="flex flex-col gap-0.5">
+                    <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
+                      Token Sales Summary by Staff Member
+                    </h3>
+                    <p className="text-[9px] text-zinc-600">Click a staff card to manage limits and view history</p>
+                  </div>
+                  <span className="text-[9px] text-zinc-600 font-mono font-bold">{staffList.length} operators</span>
                 </div>
                 <div className="p-4">
                   {staffList.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-zinc-600 font-bold uppercase">
-                      No staff accounts registered
+                    <div className="p-8 text-center text-xs text-zinc-600 font-bold uppercase flex flex-col items-center gap-2">
+                      <span className="text-2xl opacity-30">👥</span>
+                      <span>No staff accounts registered</span>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {staffList.map((staff) => {
+                        const now = new Date();
                         const staffTxs = tokenTransactions.filter(tx => tx.soldBy === staff.username);
-                        const tokensSold = staffTxs.reduce((sum, tx) => sum + tx.tokens, 0);
+                        const currentMonthTxs = staffTxs.filter(tx => {
+                          const d = new Date(tx.createdAt);
+                          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                        });
+                        const tokensSoldThisMonth = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
+                        const tokensSoldAllTime = staffTxs.reduce((sum, tx) => sum + tx.tokens, 0);
                         const amountCollected = staffTxs.reduce((sum, tx) => sum + tx.amount, 0);
+                        const limit = staff.monthlyTokenLimit ?? 1000;
+                        const remaining = Math.max(0, limit - tokensSoldThisMonth);
+                        const usagePct = limit > 0 ? Math.min(100, (tokensSoldThisMonth / limit) * 100) : 0;
+                        const isNearLimit = usagePct >= 80;
+                        const isOverLimit = usagePct >= 100;
 
                         return (
-                          <div key={staff.id} className="bg-zinc-900/10 border border-white/2 p-4 rounded-sm flex justify-between items-center">
-                            <div className="flex flex-col">
-                              <span className="text-xs font-bold text-zinc-200">{staff.name}</span>
-                              <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-wider mt-0.5">@{staff.username}</span>
+                          <button
+                            key={staff.id}
+                            onClick={() => {
+                              setSelectedStaffDetail(staff);
+                              setEditingLimitValue(String(staff.monthlyTokenLimit ?? 1000));
+                            }}
+                            className="bg-zinc-900/20 border border-white/4 p-4 rounded-xl flex flex-col gap-3 text-left hover:border-orange-500/20 hover:bg-zinc-900/40 transition-all cursor-pointer active:scale-[0.98] group relative overflow-hidden"
+                          >
+                            {/* Glow decoration */}
+                            <div className="absolute -right-6 -top-6 w-16 h-16 bg-blue-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-orange-500/8 transition-colors" />
+
+                            {/* Staff name + status */}
+                            <div className="flex items-center justify-between relative z-10">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-zinc-800 border border-white/8 flex items-center justify-center text-[9px] font-black text-zinc-300 uppercase">
+                                  {staff.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
+                                </div>
+                                <div>
+                                  <div className="text-xs font-bold text-zinc-200 group-hover:text-orange-300 transition-colors">{staff.name}</div>
+                                  <div className="text-[9px] text-zinc-500 font-bold">@{staff.username}</div>
+                                </div>
+                              </div>
+                              <span className={`text-[8px] px-2 py-0.5 rounded-full font-black uppercase border ${
+                                staff.status === 'active'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20'
+                              }`}>
+                                {staff.status}
+                              </span>
                             </div>
-                            <div className="text-right">
-                              <span className="block font-mono font-bold text-xs text-blue-400">{tokensSold.toFixed(2)} TK</span>
-                              <span className="block font-mono text-[10px] text-emerald-500 font-bold mt-0.5">₹{amountCollected.toFixed(2)}</span>
+
+                            {/* Monthly usage bar */}
+                            <div className="flex flex-col gap-1.5 relative z-10">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[8px] uppercase text-zinc-500 font-bold tracking-wider">Monthly Usage</span>
+                                <span className={`text-[9px] font-mono font-black ${
+                                  isOverLimit ? 'text-red-400' : isNearLimit ? 'text-amber-400' : 'text-zinc-400'
+                                }`}>{tokensSoldThisMonth.toFixed(0)} / {limit} TK</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/3">
+                                <div
+                                  style={{ width: `${usagePct}%` }}
+                                  className={`h-full rounded-full transition-all ${
+                                    isOverLimit ? 'bg-red-500' : isNearLimit ? 'bg-amber-400' : 'bg-blue-500'
+                                  }`}
+                                />
+                              </div>
                             </div>
-                          </div>
+
+                            {/* Stats grid */}
+                            <div className="grid grid-cols-2 gap-2 relative z-10">
+                              <div className="bg-zinc-950/60 border border-white/3 rounded-lg p-2.5 flex flex-col gap-0.5">
+                                <span className="text-[7px] uppercase text-zinc-600 font-bold tracking-wider">Remaining</span>
+                                <span className={`text-sm font-black font-mono ${
+                                  isOverLimit ? 'text-red-400' : isNearLimit ? 'text-amber-400' : 'text-emerald-400'
+                                }`}>{remaining.toFixed(0)}</span>
+                                <span className="text-[7px] text-zinc-600 font-bold">tokens left</span>
+                              </div>
+                              <div className="bg-zinc-950/60 border border-white/3 rounded-lg p-2.5 flex flex-col gap-0.5">
+                                <span className="text-[7px] uppercase text-zinc-600 font-bold tracking-wider">All-Time</span>
+                                <span className="text-sm font-black font-mono text-blue-400">{tokensSoldAllTime.toFixed(0)}</span>
+                                <span className="text-[7px] text-zinc-600 font-bold">TK sold</span>
+                              </div>
+                            </div>
+
+                            {/* Revenue */}
+                            <div className="flex items-center justify-between border-t border-white/4 pt-2.5 relative z-10">
+                              <span className="text-[8px] uppercase text-zinc-600 font-bold">Total Revenue Collected</span>
+                              <span className="font-mono font-black text-xs text-emerald-400">₹{amountCollected.toFixed(2)}</span>
+                            </div>
+
+                            {/* Click hint */}
+                            <div className="text-[8px] text-zinc-600 font-bold uppercase tracking-wider text-center opacity-0 group-hover:opacity-100 transition-opacity relative z-10">
+                              Click to manage →
+                            </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -754,6 +876,11 @@ export default function OwnerDashboardPage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* 5. PROFILE WORKSPACE */}
+          {activeWorkspace === 'profile' && (
+            <ProfileSection />
           )}
 
         </div>
@@ -767,6 +894,133 @@ export default function OwnerDashboardPage() {
         />
       )}
 
+      
+      {/* Staff Detail Modal */}
+      {selectedStaffDetail && (() => {
+        const now = new Date();
+        const staffTxs = tokenTransactions.filter(tx => tx.soldBy === selectedStaffDetail.username);
+        const currentMonthTxs = staffTxs.filter(tx => {
+          const d = new Date(tx.createdAt);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+        const tokensSoldThisMonth = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
+        const amountCollected = staffTxs.reduce((sum, tx) => sum + tx.amount, 0);
+        const limit = selectedStaffDetail.monthlyTokenLimit ?? 1000;
+        const remaining = Math.max(0, limit - tokensSoldThisMonth);
+        const usagePct = limit > 0 ? Math.min(100, (tokensSoldThisMonth / limit) * 100) : 0;
+        const isNearLimit = usagePct >= 80;
+        const isOverLimit = usagePct >= 100;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in" onClick={() => setSelectedStaffDetail(null)}>
+            <div className="bg-[#141416] border border-white/5 w-full max-w-lg max-h-[90vh] rounded-xl overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-zinc-950/85 px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-zinc-900 border border-white/8 flex items-center justify-center text-xs font-black text-zinc-300 uppercase shadow-inner">
+                    {selectedStaffDetail.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-white">{selectedStaffDetail.name}</div>
+                    <div className="text-[9px] text-zinc-500 font-bold mt-0.5">@{selectedStaffDetail.username} &middot; Token Operator</div>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedStaffDetail(null)} className="text-[10px] text-zinc-500 hover:text-white uppercase font-bold tracking-wider cursor-pointer">&#x2715; Close</button>
+              </div>
+              <div className="flex-1 overflow-y-auto flex flex-col gap-5 p-5">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-zinc-900/30 border border-white/4 rounded-xl p-3 flex flex-col gap-1">
+                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">This Month</span>
+                    <span className="text-xl font-black font-mono text-blue-400">{tokensSoldThisMonth.toFixed(0)}</span>
+                    <span className="text-[8px] text-zinc-600 font-bold">tokens sold</span>
+                  </div>
+                  <div className={`bg-zinc-900/30 border rounded-xl p-3 flex flex-col gap-1 ${isOverLimit ? 'border-red-500/30' : isNearLimit ? 'border-amber-500/30' : 'border-white/4'}`}>
+                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">Remaining</span>
+                    <span className={`text-xl font-black font-mono ${isOverLimit ? 'text-red-400' : isNearLimit ? 'text-amber-400' : 'text-emerald-400'}`}>{remaining.toFixed(0)}</span>
+                    <span className="text-[8px] text-zinc-600 font-bold">tokens left</span>
+                  </div>
+                  <div className="bg-zinc-900/30 border border-white/4 rounded-xl p-3 flex flex-col gap-1">
+                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">Revenue</span>
+                    <span className="text-xl font-black font-mono text-emerald-400">&#8377;{amountCollected.toFixed(0)}</span>
+                    <span className="text-[8px] text-zinc-600 font-bold">all-time</span>
+                  </div>
+                </div>
+                <div className="bg-zinc-900/20 border border-white/4 rounded-xl p-4 flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-400">Monthly Usage</span>
+                    <span className={`text-xs font-mono font-black ${isOverLimit ? 'text-red-400' : isNearLimit ? 'text-amber-400' : 'text-zinc-300'}`}>{tokensSoldThisMonth.toFixed(0)} / {limit} TK ({usagePct.toFixed(0)}%)</span>
+                  </div>
+                  <div className="h-2.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                    <div style={{ width: `${usagePct}%` }} className={`h-full rounded-full transition-all duration-700 ${isOverLimit ? 'bg-gradient-to-r from-red-500 to-red-600' : isNearLimit ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-blue-400 to-indigo-500'}`} />
+                  </div>
+                  {isOverLimit && <p className="text-[9px] text-red-400 font-bold">&#9888; Monthly limit exceeded. New token sales are blocked.</p>}
+                  {isNearLimit && !isOverLimit && <p className="text-[9px] text-amber-400 font-bold">&#9888; Approaching monthly limit. Consider raising the cap.</p>}
+                </div>
+                <div className="bg-zinc-900/20 border border-white/4 rounded-xl p-4 flex flex-col gap-3">
+                  <div>
+                    <h4 className="text-[9px] uppercase font-bold tracking-widest text-zinc-400">Set Monthly Token Limit</h4>
+                    <p className="text-[9px] text-zinc-600 mt-0.5">Restrict how many tokens this operator can sell per calendar month.</p>
+                  </div>
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <label className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Limit (tokens / month)</label>
+                      <div className="relative flex items-center">
+                        <input type="number" min="0" value={editingLimitValue} onChange={(e) => setEditingLimitValue(e.target.value)} className="minimal-input w-full px-3.5 py-2.5 text-sm font-mono text-white pr-10 focus:border-orange-500/50" />
+                        <span className="absolute right-3 text-[9px] text-zinc-500 font-bold uppercase pointer-events-none">TK</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const newLimit = parseInt(editingLimitValue) || 0;
+                        await updateStaffLimit(selectedStaffDetail.id, newLimit);
+                        setSelectedStaffDetail(prev => prev ? { ...prev, monthlyTokenLimit: newLimit } : null);
+                      }}
+                      className="minimal-btn-primary px-4 py-2.5 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer active:scale-95 transition-transform whitespace-nowrap"
+                    >
+                      Save Limit
+                    </button>
+                  </div>
+                  <div className="text-[9px] text-zinc-600">Current: <span className="font-mono font-bold text-zinc-400">{limit} TK/month</span> &middot; &#8776; &#8377;{(limit * 30).toFixed(0)} cap</div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[9px] uppercase font-bold tracking-widest text-zinc-400">Transaction History</h4>
+                    <span className="text-[9px] text-zinc-600 font-mono">{staffTxs.length} total</span>
+                  </div>
+                  {staffTxs.length === 0 ? (
+                    <div className="bg-zinc-900/20 border border-white/4 rounded-xl p-6 text-center">
+                      <span className="text-[10px] text-zinc-600 font-bold uppercase">No transactions recorded yet</span>
+                    </div>
+                  ) : (
+                    <div className="border border-white/5 rounded-xl overflow-hidden">
+                      <div className="max-h-56 overflow-y-auto">
+                        <table className="w-full text-left border-collapse text-[10px]">
+                          <thead className="sticky top-0">
+                            <tr className="border-b border-white/5 bg-zinc-950 text-zinc-500">
+                              <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Date</th>
+                              <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Student</th>
+                              <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Tokens</th>
+                              <th className="p-2.5 font-bold uppercase tracking-wider text-[8px] text-right">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/3 bg-zinc-950/20">
+                            {[...staffTxs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((tx) => (
+                              <tr key={tx.id} className="hover:bg-white/1 transition-colors">
+                                <td className="p-2.5 text-zinc-500 font-mono">{new Date(tx.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                                <td className="p-2.5"><div className="font-bold text-zinc-300">{tx.studentName}</div><div className="text-[8px] text-zinc-600 font-mono">#{tx.cardNo}</div></td>
+                                <td className="p-2.5 text-blue-400 font-mono font-bold">+{tx.tokens}</td>
+                                <td className="p-2.5 text-emerald-400 font-mono font-bold text-right">&#8377;{tx.amount.toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Edit Food Item Modal */}
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in" onClick={() => setEditingItem(null)}>

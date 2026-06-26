@@ -48,6 +48,7 @@ export interface StaffAccount {
   password: string;
   status: 'active' | 'inactive';
   role?: 'staff' | 'owner';
+  monthlyTokenLimit?: number;
 }
 
 export interface TokenAccount {

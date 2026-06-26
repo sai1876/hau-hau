@@ -36,7 +36,6 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
     setTokensInput(val);
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed >= 0) {
-      // 1 Token = 30 Rupees
       const rupees = Math.round(parsed * 30 * 100) / 100;
       setRupeesInput(rupees.toString());
     } else {
@@ -48,7 +47,6 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
     setRupeesInput(val);
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed >= 0) {
-      // Convert rupees to tokens
       const tokens = Math.round((parsed / 30) * 100) / 100;
       setTokensInput(tokens.toString());
     } else {
@@ -98,30 +96,76 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
   };
 
   return (
-    <div className="minimal-card rounded-md flex flex-col overflow-hidden relative">
-      {/* Decorative top border if in edit mode */}
+    <div className="minimal-card rounded-xl flex flex-col overflow-hidden relative">
+      {/* Decorative top border glow if in edit mode */}
       {editingToken && (
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-500" />
+        <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-blue-500 to-indigo-600" />
       )}
 
-      <div className="bg-zinc-950/80 px-4 py-3 border-b border-white/3 flex justify-between items-center">
-        <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
-          {editingToken ? 'Edit Student Card' : 'Provision Token Card'}
+      {/* Header */}
+      <div className="bg-zinc-950/80 px-4 py-3.5 border-b border-white/5 flex justify-between items-center">
+        <h3 className="text-[10px] uppercase font-extrabold tracking-widest text-zinc-400">
+          {editingToken ? 'Modify Student Card' : 'Provision Pass Card'}
         </h3>
         {editingToken && (
           <button
             onClick={onCancelEdit}
-            className="text-[9px] text-zinc-500 hover:text-white uppercase font-bold tracking-widest cursor-pointer"
+            className="text-[9px] text-zinc-500 hover:text-white uppercase font-extrabold tracking-widest cursor-pointer"
           >
             Cancel
           </button>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4 text-xs">
+      {/* NFC Plastic Card Live Preview */}
+      <div className="p-4.5 border-b border-white/5 bg-zinc-950/40">
+        <div className="text-[8px] uppercase tracking-widest text-zinc-500 font-extrabold mb-3 text-center">NFC Card Live Preview</div>
+        <div className="nfc-card w-full h-40 rounded-xl p-4.5 flex flex-col justify-between text-white relative">
+          {/* Card branding */}
+          <div className="flex justify-between items-start relative z-10">
+            <div className="flex flex-col">
+              <span className="text-[8px] tracking-widest uppercase font-black text-white/45">HAU HAU PORTAL</span>
+              <span className="text-[10px] font-black tracking-wider text-orange-400 mt-0.5">STUDENT PASS</span>
+            </div>
+            <div className="nfc-card-chip" />
+          </div>
+
+          {/* Tokens & value display */}
+          <div className="flex flex-col mt-1.5 relative z-10">
+            <span className="text-[8px] uppercase tracking-wider text-white/40 font-bold">BALANCE</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-xl font-mono font-black text-blue-300">
+                {parseFloat(tokensInput) ? parseFloat(tokensInput).toFixed(2) : '0.00'} <span className="text-xs font-sans font-extrabold">TK</span>
+              </span>
+              <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                ≈ ₹{parseFloat(rupeesInput) ? parseFloat(rupeesInput).toFixed(2) : '0.00'}
+              </span>
+            </div>
+          </div>
+
+          {/* Cardholder details */}
+          <div className="flex justify-between items-end mt-2 pt-2 border-t border-white/5 relative z-10">
+            <div className="flex flex-col pr-4 flex-1">
+              <span className="text-[7px] uppercase tracking-widest text-white/40 font-bold">HOLDER</span>
+              <span className="text-xs font-extrabold tracking-wide uppercase truncate text-zinc-100">
+                {name.trim() || 'Awaiting Name Input'}
+              </span>
+            </div>
+            <div className="flex flex-col text-right shrink-0">
+              <span className="text-[7px] uppercase tracking-widest text-white/40 font-bold">CARD ID</span>
+              <span className="text-xs font-mono font-black text-blue-400">
+                #{cardNo ? cardNo.padStart(3, '0') : '000'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Form Fields */}
+      <form onSubmit={handleSubmit} className="p-4.5 flex flex-col gap-4 text-xs">
         {/* Student Name */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">
+          <label className="text-[9px] text-zinc-500 uppercase font-extrabold tracking-widest">
             Student Name
           </label>
           <input
@@ -136,7 +180,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
 
         {/* Card Number */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">
+          <label className="text-[9px] text-zinc-500 uppercase font-extrabold tracking-widest">
             Card Number (3 Digits)
           </label>
           <input
@@ -146,10 +190,10 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
             placeholder="e.g. 001"
             value={cardNo}
             onChange={(e) => setCardNo(e.target.value.replace(/\D/g, ''))} // only allow digits
-            className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700 font-mono"
+            className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700 font-mono text-center tracking-widest"
           />
-          <span className="text-[8px] text-zinc-600 font-medium">
-            Must be numeric, unique, and exactly 3 digits.
+          <span className="text-[8px] text-zinc-600 font-bold uppercase tracking-wider">
+            Numeric, unique, and exactly 3 digits.
           </span>
         </div>
 
@@ -157,7 +201,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
         <div className="grid grid-cols-2 gap-3">
           {/* Tokens Input */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">
+            <label className="text-[9px] text-zinc-500 uppercase font-extrabold tracking-widest">
               Tokens
             </label>
             <div className="relative flex items-center">
@@ -179,7 +223,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
 
           {/* Rupees Input */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">
+            <label className="text-[9px] text-zinc-500 uppercase font-extrabold tracking-widest">
               Amount (₹)
             </label>
             <div className="relative flex items-center">
@@ -200,26 +244,26 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
           </div>
         </div>
 
-        <span className="text-[8px] text-zinc-600 font-medium">
-          Entering either field automatically converts the other (1 Token = ₹30.00).
+        <span className="text-[8px] text-zinc-650 font-bold uppercase tracking-wider text-center">
+          1 Token = ₹30.00 exchange rate.
         </span>
 
         {/* Submit */}
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2.5 pt-1.5">
           {editingToken && (
             <button
               type="button"
               onClick={onCancelEdit}
-              className="minimal-btn-secondary flex-1 text-white font-bold py-2.5 rounded-sm uppercase tracking-wider transition-transform active:scale-[0.98] text-[10px] h-10 flex items-center justify-center cursor-pointer"
+              className="minimal-btn-secondary flex-1 text-white font-extrabold py-2.5 rounded-lg uppercase tracking-wider transition-transform active:scale-[0.98] text-[10px] h-10 flex items-center justify-center cursor-pointer"
             >
               Cancel
             </button>
           )}
           <button
             type="submit"
-            className="minimal-btn-primary flex-1 text-white font-bold py-2.5 rounded-sm uppercase tracking-wider transition-transform active:scale-[0.98] text-[10px] h-10 flex items-center justify-center cursor-pointer"
+            className="minimal-btn-primary flex-1 text-white font-extrabold py-2.5 rounded-lg uppercase tracking-wider transition-transform active:scale-[0.98] text-[10px] h-10 flex items-center justify-center cursor-pointer shadow-sm"
           >
-            {editingToken ? 'Save Changes' : 'Create Card'}
+            {editingToken ? 'Save Card' : 'Provision Card'}
           </button>
         </div>
       </form>
