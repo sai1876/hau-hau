@@ -26,27 +26,24 @@ export function TableSelector() {
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
         <div>
-          <h2 className="text-[10px] uppercase tracking-widest text-zinc-400 font-extrabold flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-orange-500 inline-block animate-pulse-ring" />
-            Live Table Dispatcher
-          </h2>
-          <p className="text-[10px] text-zinc-500 mt-1 font-semibold">Map order streams to floor stations or guest tables</p>
+          <h2 className="text-base text-foreground font-bold">Select a Table</h2>
+          <p className="text-xs text-text-muted mt-1">Tap a table to start taking an order</p>
         </div>
         
         {/* Custom Input */}
         <form onSubmit={handleCustomSubmit} className="flex gap-2">
           <input
             type="text"
-            placeholder="TABLE #"
+            placeholder="Enter table number manually"
             value={customTable}
             onChange={(e) => setCustomTable(e.target.value)}
-            className="minimal-input px-3.5 py-2 text-xs text-white focus:outline-none placeholder-zinc-700 w-28 tracking-widest uppercase font-bold text-center"
+            className="minimal-input px-3 py-2 text-xs text-white focus:outline-none placeholder-text-muted/50 w-52 font-semibold text-left"
           />
           <button
             type="submit"
-            className="minimal-btn-primary text-white px-4 py-2 rounded-md font-extrabold text-[10px] uppercase tracking-wider transition-all cursor-pointer h-9 flex items-center"
+            className="minimal-btn-primary text-white px-4 py-2 rounded-md font-bold text-xs transition-all cursor-pointer h-9 flex items-center"
           >
-            Dispatch Port
+            Open Table
           </button>
         </form>
       </div>
@@ -60,40 +57,45 @@ export function TableSelector() {
           const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
           const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
           
-          let borderClass = 'border-zinc-800/80 bg-zinc-900/10 hover:border-zinc-700/80 hover:bg-zinc-900/30';
-          let textClass = 'text-zinc-500';
-          let statusLight = 'bg-zinc-800';
+          let borderClass = 'border-border bg-surface/20 hover:border-text-muted/30 hover:bg-surface/40';
+          let textClass = 'text-text-muted';
+          let statusLight = 'bg-border';
 
           if (isActive) {
-            borderClass = 'border-orange-500/40 bg-orange-500/[0.04] shadow-[0_4px_20px_rgba(249,115,22,0.06)]';
-            textClass = 'text-white font-extrabold';
-            statusLight = 'bg-orange-500 animate-pulse-ring';
+            borderClass = 'border-primary bg-primary/5 shadow-[0_4px_20px_rgba(224,123,57,0.08)]';
+            textClass = 'text-foreground font-bold';
+            statusLight = 'bg-primary animate-pulse-ring';
           } else if (hasItems) {
-            borderClass = 'border-amber-500/30 bg-amber-500/[0.03] hover:border-amber-500/50 hover:bg-amber-500/[0.05]';
-            textClass = 'text-amber-400 font-extrabold';
-            statusLight = 'bg-amber-500';
+            borderClass = 'border-primary/30 bg-primary/[0.02] hover:border-primary/50 hover:bg-primary/[0.04]';
+            textClass = 'text-primary font-bold';
+            statusLight = 'bg-primary';
           }
 
           return (
             <button
               key={table}
               onClick={() => selectActiveTable(table)}
-              className={`h-16 flex flex-col justify-between p-3 rounded-lg border text-left transition-all duration-300 relative cursor-pointer group ${borderClass} ${textClass}`}
+              className={`h-16 min-w-[80px] flex flex-col justify-between p-3 rounded-lg border text-left transition-all duration-300 relative cursor-pointer group ${borderClass} ${textClass}`}
             >
               <div className="flex justify-between items-center w-full">
-                <span className="font-mono font-black text-sm tracking-tight group-hover:text-white transition-colors">
-                  T{table.split(' ')[1] || table}
+                <span className="font-semibold text-xs leading-none group-hover:text-foreground transition-colors">
+                  {table}
                 </span>
-                <span className={`w-2 h-2 rounded-full ${statusLight} transition-all duration-300`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${statusLight} transition-all duration-300`} />
               </div>
               
-              <div className="text-[8px] font-bold uppercase tracking-wider">
+              <div className="text-[9px] font-bold">
                 {isActive ? (
-                  <span className="text-orange-400 font-extrabold">Active</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#71d384] font-mono">
+                      {hasItems ? `₹${cartTotal.toFixed(0)} · ${cartItemsCount} item${cartItemsCount !== 1 ? 's' : ''}` : 'Ready'}
+                    </span>
+                    <span className="bg-[#1b3821] text-[#71d384] text-[8px] px-1 py-0.2 rounded border border-[#2e7d32]/20 font-bold scale-90 origin-right">Active</span>
+                  </div>
                 ) : hasItems ? (
-                  <span className="text-amber-500 font-mono">₹{cartTotal.toFixed(0)} ({cartItemsCount})</span>
+                  <span className="text-primary font-mono">₹{cartTotal.toFixed(0)} · {cartItemsCount} item{cartItemsCount !== 1 ? 's' : ''}</span>
                 ) : (
-                  <span className="text-zinc-600">Ready</span>
+                  <span className="text-text-muted/65">Ready</span>
                 )}
               </div>
             </button>
@@ -103,18 +105,18 @@ export function TableSelector() {
       
       {/* Active Selection Display */}
       {activeTable && (
-        <div className="flex items-center justify-between bg-zinc-950/80 px-4 py-3 border border-white/3 rounded-lg animate-slide-in relative z-10">
+        <div className="flex items-center justify-between bg-[#1b3821]/20 px-4 py-3 border border-[#2e7d32]/30 rounded-lg animate-slide-in relative z-10">
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse-ring" />
-            <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">
-              Active Session Link: <span className="text-orange-400 font-extrabold ml-1.5 font-mono">#{activeTable.toUpperCase()}</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#71d384] animate-pulse-ring-emerald" />
+            <span className="text-xs text-[#71d384] font-semibold">
+              Active Session: <span className="font-bold ml-1">{activeTable}</span>
             </span>
           </div>
           <button
             onClick={() => selectActiveTable(null)}
-            className="text-[9px] text-zinc-500 font-extrabold hover:text-red-400 uppercase tracking-widest transition-colors cursor-pointer"
+            className="text-xs text-text-muted hover:text-error transition-colors cursor-pointer font-bold"
           >
-            ✕ Release Station
+            Close Table
           </button>
         </div>
       )}

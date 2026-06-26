@@ -109,94 +109,94 @@ export function ProfileSection() {
       
       {/* 1. Profile Overview Card */}
       <div className="lg:col-span-1 flex flex-col gap-6">
-        <div className="minimal-card rounded-md overflow-hidden relative">
+        <div className="minimal-card rounded-xl overflow-hidden relative bg-surface border border-border">
           {/* Glowing Top Decoration */}
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-linear-to-r from-transparent via-orange-500 to-transparent" />
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-linear-to-r from-transparent via-primary to-transparent" />
           
           <div className="p-6 flex flex-col items-center text-center">
             {/* Avatar badge */}
-            <div className="w-16 h-16 rounded-full bg-zinc-900 border border-white/8 flex items-center justify-center text-white font-extrabold text-lg shadow-inner shadow-black relative mb-4">
+            <div className="w-16 h-16 rounded-full bg-surface-container border border-border flex items-center justify-center text-foreground font-bold text-lg shadow-inner relative mb-4">
               {getInitials(name || currentUser.name)}
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border border-zinc-950" />
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-success rounded-full border border-surface" />
             </div>
 
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">{name || currentUser.name}</h2>
-            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">@{currentUser.username}</p>
+            <h2 className="text-sm font-bold text-foreground">{name || currentUser.name}</h2>
+            <p className="text-xs text-text-muted font-mono mt-0.5">@{currentUser.username}</p>
 
             <div className="mt-3 flex gap-2">
-              <span className="text-[9px] bg-zinc-900 text-zinc-400 px-2 py-0.5 border border-zinc-800 rounded-sm font-bold uppercase tracking-wider">
+              <span className="text-[10px] bg-surface-container text-text-muted px-2 py-0.5 border border-border rounded-md font-bold">
                 {currentUser.role === 'owner' ? 'System Administrator' : 'POS Floor Staff'}
               </span>
               <StatusBadge status={dbUser?.status || 'active'} />
             </div>
 
             {/* Info list */}
-            <div className="w-full mt-6 flex flex-col gap-3.5 border-t border-white/3 pt-6 text-xs text-left">
+            <div className="w-full mt-6 flex flex-col gap-3.5 border-t border-border pt-6 text-xs text-left">
               <div className="flex justify-between items-center">
-                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Registered Email</span>
-                <span className="text-zinc-300 font-semibold truncate max-w-[180px]">{emailOrPhone || dbUser?.emailOrPhone || 'N/A'}</span>
+                <span className="text-text-muted font-bold text-xs">Registered Email</span>
+                <span className="text-foreground font-semibold truncate max-w-[180px]">{emailOrPhone || dbUser?.emailOrPhone || 'N/A'}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">Security Status</span>
-                <span className="text-emerald-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1">
+                <span className="text-text-muted font-bold text-xs">Security Status</span>
+                <span className="text-[#71d384] font-bold text-xs flex items-center gap-1">
                   🛡 Verified
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[8px]">System ID</span>
-                <span className="text-zinc-600 font-mono text-[9px] truncate max-w-[120px]">{dbUser?.id || 'default'}</span>
+                <span className="text-text-muted font-bold text-xs">System ID</span>
+                <span className="text-text-muted font-mono text-xs truncate max-w-[120px]">{dbUser?.id || 'default'}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Change Password Block */}
-        <div className="minimal-card rounded-md overflow-hidden">
-          <div className="bg-zinc-950/80 px-4 py-3 border-b border-white/3">
-            <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">Update Credentials</h3>
+        <div className="minimal-card rounded-xl overflow-hidden bg-surface border border-border">
+          <div className="bg-surface-header px-4 py-3 border-b border-border">
+            <h3 className="text-xs text-foreground font-bold">Update Credentials</h3>
           </div>
           
           <form onSubmit={handleChangePassword} className="p-5 flex flex-col gap-4 text-xs">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">New Password</label>
+              <label className="text-xs text-text-muted font-bold">New Password</label>
               <input
                 type="password"
                 required
                 placeholder="Minimum 6 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700"
+                className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-text-muted/50 font-semibold"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Confirm Password</label>
+              <label className="text-xs text-text-muted font-bold">Confirm Password</label>
               <input
                 type="password"
                 required
                 placeholder="Verify password match"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700"
+                className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-text-muted/50 font-semibold"
               />
             </div>
 
             {/* Verification checklist */}
             {password.length > 0 && (
-              <div className="flex flex-col gap-1 bg-zinc-950/50 p-2.5 border border-white/2 rounded-sm text-[9px]">
+              <div className="flex flex-col gap-1 bg-surface-container/30 p-2.5 border border-border rounded-md text-[10px]">
                 <div className="flex items-center gap-1.5 font-bold">
-                  <span className={passwordStrength.length ? 'text-emerald-500' : 'text-zinc-600'}>
+                  <span className={passwordStrength.length ? 'text-[#71d384]' : 'text-text-muted/40'}>
                     {passwordStrength.length ? '✓' : '✗'}
                   </span>
-                  <span className={passwordStrength.length ? 'text-zinc-300' : 'text-zinc-500'}>
+                  <span className={passwordStrength.length ? 'text-foreground' : 'text-text-muted'}>
                     At least 6 characters long
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 font-bold">
-                  <span className={passwordStrength.match ? 'text-emerald-500' : 'text-zinc-600'}>
+                  <span className={passwordStrength.match ? 'text-[#71d384]' : 'text-text-muted/40'}>
                     {passwordStrength.match ? '✓' : '✗'}
                   </span>
-                  <span className={passwordStrength.match ? 'text-zinc-300' : 'text-zinc-500'}>
+                  <span className={passwordStrength.match ? 'text-foreground' : 'text-text-muted'}>
                     Passwords match exactly
                   </span>
                 </div>
@@ -206,10 +206,10 @@ export function ProfileSection() {
             <button
               type="submit"
               disabled={isSubmitting || !passwordStrength.length || !passwordStrength.match}
-              className={`text-white font-bold py-2.5 rounded-sm uppercase tracking-wider transition-transform active:scale-[0.98] mt-2 text-[10px] h-10 flex items-center justify-center cursor-pointer shadow-sm ${
+              className={`font-bold py-2.5 rounded-lg transition-all mt-2 text-xs h-10 flex items-center justify-center cursor-pointer shadow-md ${
                 passwordStrength.length && passwordStrength.match
-                  ? 'bg-orange-500 hover:bg-orange-600 active:scale-95'
-                  : 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-50'
+                  ? 'bg-primary hover:bg-primary-hover text-white active:scale-95'
+                  : 'bg-surface-container text-text-muted border border-border cursor-not-allowed opacity-50'
               }`}
             >
               {isSubmitting ? 'Securing...' : 'Change Password'}
@@ -223,28 +223,28 @@ export function ProfileSection() {
         
         {/* Statistics Panels */}
         <div className="flex flex-col gap-3">
-          <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
+          <h3 className="text-xs text-foreground font-bold">
             {currentUser.role === 'owner' ? 'Business Operations Intelligence' : 'Your Floor Performance'}
           </h3>
           
           {currentUser.role === 'owner' ? (
             /* OWNER ANALYTICS */
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-zinc-900/10 border border-white/3 p-4 rounded-sm">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Total Sales</span>
-                <span className="block font-mono font-black text-sm text-emerald-400 mt-1">₹{totalSystemRevenue.toFixed(2)}</span>
+              <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
+                <span className="text-xs text-text-muted font-semibold">Total Sales</span>
+                <span className="block font-mono font-bold text-base text-[#71d384] mt-1">₹{totalSystemRevenue.toFixed(2)}</span>
               </div>
-              <div className="bg-zinc-900/10 border border-white/3 p-4 rounded-sm">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Orders Dispatched</span>
-                <span className="block font-mono font-black text-sm text-white mt-1">{completedSystemOrders}</span>
+              <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
+                <span className="text-xs text-text-muted font-semibold">Orders Dispatched</span>
+                <span className="block font-mono font-bold text-base text-foreground mt-1">{completedSystemOrders}</span>
               </div>
-              <div className="bg-zinc-900/10 border border-white/3 p-4 rounded-sm">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Active Staff</span>
-                <span className="block font-mono font-black text-sm text-blue-400 mt-1">{activeStaffCount} members</span>
+              <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
+                <span className="text-xs text-text-muted font-semibold">Active Staff</span>
+                <span className="block font-mono font-bold text-base text-blue-400 mt-1">{activeStaffCount} members</span>
               </div>
-              <div className="bg-zinc-900/10 border border-white/3 p-4 rounded-sm">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Avg Ticket Size</span>
-                <span className="block font-mono font-black text-sm text-amber-500 mt-1">
+              <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
+                <span className="text-xs text-text-muted font-semibold">Avg Ticket Size</span>
+                <span className="block font-mono font-bold text-base text-primary mt-1">
                   ₹{completedSystemOrders > 0 ? (totalSystemRevenue / completedSystemOrders).toFixed(2) : '0.00'}
                 </span>
               </div>
@@ -252,38 +252,38 @@ export function ProfileSection() {
           ) : (
             /* STAFF ANALYTICS */
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-zinc-900/10 border border-white/3 p-4 rounded-sm">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Orders Cleared</span>
-                <span className="block font-mono font-black text-sm text-white mt-1">{staffOrders.length}</span>
+              <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
+                <span className="text-xs text-text-muted font-semibold">Orders Cleared</span>
+                <span className="block font-mono font-bold text-base text-foreground mt-1">{staffOrders.length}</span>
               </div>
-              <div className="bg-zinc-900/10 border border-white/3 p-4 rounded-sm">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Shift Sales Vol.</span>
-                <span className="block font-mono font-black text-sm text-emerald-400 mt-1">₹{staffVolume.toFixed(2)}</span>
+              <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
+                <span className="text-xs text-text-muted font-semibold">Shift Sales Vol.</span>
+                <span className="block font-mono font-bold text-base text-[#71d384] mt-1">₹{staffVolume.toFixed(2)}</span>
               </div>
-              <div className="bg-zinc-900/10 border border-white/3 p-4 rounded-sm">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Tokens Dispensed</span>
-                <span className="block font-mono font-black text-sm text-blue-400 mt-1">{staffTokensSold.toFixed(2)} TK</span>
+              <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
+                <span className="text-xs text-text-muted font-semibold">Tokens Dispensed</span>
+                <span className="block font-mono font-bold text-base text-blue-400 mt-1">{staffTokensSold.toFixed(2)} TK</span>
               </div>
-              <div className="bg-zinc-900/10 border border-white/3 p-4 rounded-sm">
-                <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Token Revenue</span>
-                <span className="block font-mono font-black text-sm text-amber-500 mt-1">₹{staffRupeesCollected.toFixed(2)}</span>
+              <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
+                <span className="text-xs text-text-muted font-semibold">Token Revenue</span>
+                <span className="block font-mono font-bold text-base text-primary mt-1">₹{staffRupeesCollected.toFixed(2)}</span>
               </div>
             </div>
           )}
         </div>
 
         {/* Profile Details Edit Card */}
-        <div className="minimal-card rounded-md overflow-hidden">
-          <div className="bg-zinc-950/80 px-5 py-4 border-b border-white/3 flex justify-between items-center">
+        <div className="minimal-card rounded-xl overflow-hidden bg-surface border border-border">
+          <div className="bg-surface-header px-5 py-4 border-b border-border flex justify-between items-center">
             <div className="flex flex-col">
-              <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Identity Directory</span>
-              <span className="text-xs font-bold text-white mt-0.5">Profile Information</span>
+              <span className="text-xs text-text-muted font-semibold">Identity Directory</span>
+              <span className="text-xs font-bold text-foreground mt-0.5">Profile Information</span>
             </div>
             {!isEditing && (
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
-                className="minimal-btn-secondary px-3.5 py-1.5 text-[9px] font-bold uppercase tracking-wider rounded-sm cursor-pointer active:scale-95 transition-transform"
+                className="minimal-btn-secondary px-3.5 py-1.5 text-[11px] font-bold rounded-md cursor-pointer active:scale-95 transition-transform"
               >
                 ✏ Edit Profile
               </button>
@@ -294,7 +294,7 @@ export function ProfileSection() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Full Name */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Full Name</label>
+                <label className="text-xs text-text-muted font-bold">Full Name</label>
                 <input
                   type="text"
                   required
@@ -302,15 +302,15 @@ export function ProfileSection() {
                   placeholder="e.g. Sarah Connor"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className={`minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700 ${
-                    !isEditing ? 'opacity-55 cursor-not-allowed bg-zinc-950/20' : ''
+                  className={`minimal-input px-3.5 py-2.5 text-xs text-white placeholder-text-muted/50 font-semibold ${
+                    !isEditing ? 'opacity-55 cursor-not-allowed bg-surface-container/45' : ''
                   }`}
                 />
               </div>
 
               {/* Email / Phone */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Email or Phone Number</label>
+                <label className="text-xs text-text-muted font-bold">Email or Phone Number</label>
                 <input
                   type="text"
                   required
@@ -318,8 +318,8 @@ export function ProfileSection() {
                   placeholder="e.g. sarah@hauhau.com"
                   value={emailOrPhone}
                   onChange={(e) => setEmailOrPhone(e.target.value)}
-                  className={`minimal-input px-3.5 py-2.5 text-xs text-white placeholder-zinc-700 ${
-                    !isEditing ? 'opacity-55 cursor-not-allowed bg-zinc-950/20' : ''
+                  className={`minimal-input px-3.5 py-2.5 text-xs text-white placeholder-text-muted/50 font-semibold ${
+                    !isEditing ? 'opacity-55 cursor-not-allowed bg-surface-container/45' : ''
                   }`}
                 />
               </div>
@@ -328,23 +328,23 @@ export function ProfileSection() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
               {/* Username (Immutable) */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Username (Immutable)</label>
-                <div className="minimal-input px-3.5 py-2.5 text-xs text-zinc-500 bg-zinc-950/40 select-none opacity-60 border-dashed">
+                <label className="text-xs text-text-muted font-bold">Username (Immutable)</label>
+                <div className="minimal-input px-3.5 py-2.5 text-xs text-text-muted bg-surface-container select-none opacity-60 border-dashed font-semibold">
                   {currentUser.username}
                 </div>
               </div>
 
               {/* Assigned Role (Immutable) */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Assigned Role</label>
-                <div className="minimal-input px-3.5 py-2.5 text-xs text-zinc-500 bg-zinc-950/40 select-none opacity-60 border-dashed uppercase font-bold">
+                <label className="text-xs text-text-muted font-bold">Assigned Role</label>
+                <div className="minimal-input px-3.5 py-2.5 text-xs text-text-muted bg-surface-container select-none opacity-60 border-dashed font-bold capitalize">
                   {currentUser.role}
                 </div>
               </div>
             </div>
 
             {isEditing && (
-              <div className="flex justify-end gap-2.5 border-t border-white/3 pt-4 mt-2 shrink-0 animate-slide-in">
+              <div className="flex justify-end gap-2.5 border-t border-border pt-4 mt-2 shrink-0 animate-slide-in">
                 <button
                   type="button"
                   onClick={() => {
@@ -355,14 +355,14 @@ export function ProfileSection() {
                       setEmailOrPhone(dbUser.emailOrPhone);
                     }
                   }}
-                  className="minimal-btn-secondary px-4 py-2 text-[10px] font-bold uppercase tracking-wider rounded-sm cursor-pointer active:scale-95 transition-transform"
+                  className="minimal-btn-secondary px-4 py-2 text-xs font-bold rounded-md cursor-pointer active:scale-95 transition-transform"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="minimal-btn-primary px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-white rounded-sm cursor-pointer active:scale-95 transition-transform"
+                  className="minimal-btn-primary px-5 py-2 text-xs font-bold text-white rounded-md cursor-pointer active:scale-95 transition-transform"
                 >
                   {isSubmitting ? 'Saving...' : 'Save Profile'}
                 </button>
@@ -370,9 +370,7 @@ export function ProfileSection() {
             )}
           </form>
         </div>
-
       </div>
-
     </div>
   );
 }

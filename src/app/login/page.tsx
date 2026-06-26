@@ -29,7 +29,7 @@ export default function LoginPage() {
     <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-screen bg-zinc-950 relative select-none">
       
       {/* Centered frosted minimal card */}
-      <div className="w-full max-w-sm minimal-card rounded-md p-8 shadow-2xl flex flex-col gap-6 relative">
+      <div className="w-full max-w-sm minimal-card rounded-xl p-8 shadow-2xl flex flex-col gap-6 relative">
         
         {/* Minimal branding */}
         <div className="flex flex-col items-center gap-1.5 text-center">
@@ -47,7 +47,7 @@ export default function LoginPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {errorMsg && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-semibold tracking-wider uppercase p-3 rounded-sm text-center">
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-semibold tracking-wider uppercase p-3 rounded-md text-center">
               {errorMsg}
             </div>
           )}
@@ -80,7 +80,7 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="minimal-btn-primary text-white font-bold text-xs uppercase tracking-wider py-3 rounded-sm active:scale-[0.98] mt-2 transition-transform cursor-pointer"
+            className="minimal-btn-primary text-white font-bold text-xs uppercase tracking-wider py-3 mt-2 cursor-pointer"
           >
             Log In
           </button>

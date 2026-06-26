@@ -9,14 +9,10 @@ interface StatCardProps {
 }
 
 export function StatCard({ title, value, subtext, color = 'default', iconType }: StatCardProps) {
-  let valueColor = 'text-zinc-100';
+  let valueColor = 'text-foreground';
 
   if (color === 'primary') {
-    valueColor = 'text-orange-500';
-  } else if (color === 'success') {
-    valueColor = 'text-emerald-500';
-  } else if (color === 'warning') {
-    valueColor = 'text-amber-500';
+    valueColor = 'text-primary';
   }
 
   // Pre-configured flat minimalist SVG icons
@@ -66,9 +62,9 @@ export function StatCard({ title, value, subtext, color = 'default', iconType }:
   };
 
   return (
-    <div className="minimal-card p-4.5 rounded-md flex flex-col justify-between shadow-sm">
+    <div className="minimal-card p-4.5 rounded-xl flex flex-col justify-between shadow-sm">
       <div className="flex justify-between items-center">
-        <span className="text-zinc-500 uppercase tracking-widest text-[9px] font-bold">{title}</span>
+        <span className="text-text-muted text-xs font-semibold">{title}</span>
         {renderIcon()}
       </div>
       

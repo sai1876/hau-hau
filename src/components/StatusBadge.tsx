@@ -5,15 +5,15 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  let bgClass = 'bg-[#201f1f] text-[#e5e2e1] border-[#2e2e2e]';
-  const text = status.toUpperCase();
+  let bgClass = 'bg-[#18181b] text-[#a1a1aa] border-[#2d2d30]';
+  const text = status.charAt(0).toUpperCase() + status.slice(1);
 
   if (status === 'completed' || status === 'paid' || status === 'active') {
-    bgClass = 'bg-[#152e1f] text-[#6bff8f] border-[#22c55e]/20';
+    bgClass = 'bg-[#142918] text-[#71d384] border-[#2e7d32]/35';
   } else if (status === 'pending') {
-    bgClass = 'bg-[#3a2f15] text-[#ffbc7c] border-[#ff9500]/20';
+    bgClass = 'bg-[#2a1b0c] text-[#f59e0b] border-[#e07b39]/35';
   } else if (status === 'cancelled' || status === 'inactive') {
-    bgClass = 'bg-[#3b1212] text-[#ffdad6] border-[#ef4444]/20';
+    bgClass = 'bg-[#2c1313] text-[#f39c90] border-[#c0392b]/35';
   }
 
   return (

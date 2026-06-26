@@ -26,7 +26,8 @@ export default function StaffDashboardPage() {
     sellTokens
   } = useApp();
 
-  const [activeWorkspace, setActiveWorkspace] = useState<'pos' | 'tokens' | 'profile'>('pos');
+  const [activeWorkspace, setActiveWorkspace] = useState<'pos' | 'tokens' | 'history' | 'profile'>('pos');
+  const [isIssuingNewCard, setIsIssuingNewCard] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
@@ -51,7 +52,7 @@ export default function StaffDashboardPage() {
 
   if (!currentUser || currentUser.role !== 'staff') {
     return (
-      <div className="flex-1 flex items-center justify-center bg-zinc-950 text-zinc-500 font-bold text-xs uppercase tracking-widest min-h-screen">
+      <div className="flex-1 flex items-center justify-center bg-background text-text-muted font-bold text-xs uppercase tracking-widest min-h-screen">
         Verifying Session...
       </div>
     );
@@ -64,8 +65,7 @@ export default function StaffDashboardPage() {
 
   // Filter orders created by this staff
   const staffOrders = orders
-    .filter(order => order.staffId === currentUser.username)
-    .slice(0, 5); // Limit to last 5
+    .filter(order => order.staffId === currentUser.username);
 
   // Mobile cart metadata
   const currentCart = activeTable ? tableCarts[activeTable] || [] : [];
@@ -158,18 +158,18 @@ export default function StaffDashboardPage() {
   const isPurseOverLimit = monthlyUsagePct >= 100;
 
   return (
-    <div className="flex-1 flex flex-col bg-zinc-950 min-h-screen pb-16 md:pb-0">
+    <div className="flex-1 flex flex-col bg-background h-screen overflow-hidden pb-16 md:pb-0">
       
       {/* Header Bar */}
-      <header className="bg-zinc-950/80 backdrop-blur-md border-b border-white/3 sticky top-0 z-40 px-4 py-3.5 md:px-6">
+      <header className="bg-surface-header/90 backdrop-blur-md border-b border-border shrink-0 px-4 py-2.5 md:px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 bg-zinc-900 border border-white/8 rounded-md flex items-center justify-center text-white font-extrabold text-xs shadow-sm">
+            <div className="w-8 h-8 bg-surface border border-border rounded-md flex items-center justify-center text-foreground font-bold text-sm shadow-xs">
               HH
             </div>
             <div>
-              <h1 className="font-bold text-xs uppercase tracking-wider text-white">Hau Hau</h1>
-              <span className="text-[9px] text-orange-500 uppercase font-bold tracking-widest block mt-0.5">Staff POS</span>
+              <h1 className="font-bold text-sm text-foreground leading-tight">Hau Hau</h1>
+              <span className="text-xs text-text-muted font-medium block mt-0.5">Staff Portal</span>
             </div>
           </div>
 
@@ -178,16 +178,16 @@ export default function StaffDashboardPage() {
               onClick={() => setActiveWorkspace('profile')}
               className="text-right hidden sm:flex flex-col group cursor-pointer active:scale-95 transition-transform"
             >
-              <span className="text-xs font-semibold text-zinc-200 group-hover:text-orange-400 transition-colors">
+              <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
                 {currentUser.name}
               </span>
-              <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold mt-0.5 group-hover:text-orange-500/80 transition-colors">
-                Floor Staff ⚙
+              <span className="text-[10px] text-text-muted font-bold mt-0.5 block">
+                Floor Staff <span className="text-xs text-text-muted/60 ml-0.5">⚙</span>
               </span>
             </button>
             <button
               onClick={logout}
-              className="minimal-btn-secondary text-[10px] uppercase font-bold px-3 py-1.5 rounded-sm cursor-pointer active:scale-95 transition-transform"
+              className="minimal-btn-secondary px-4 py-1.5 h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
             >
               Log Out
             </button>
@@ -196,11 +196,11 @@ export default function StaffDashboardPage() {
       </header>
 
       {/* Main Workspace */}
-      <main className="max-w-7xl w-full mx-auto p-4 md:p-6 flex-1 flex flex-col gap-6">
+      <main className="max-w-7xl w-full mx-auto p-4 md:p-6 flex-1 flex flex-col gap-4 overflow-hidden min-h-0">
         
         {/* Workspace Nav Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-1 border-b border-white/3">
-          {(['pos', 'tokens'] as const).map((space) => {
+        <div className="flex border-b border-border shrink-0">
+          {(['pos', 'tokens', 'history'] as const).map((space) => {
             const isSelected = activeWorkspace === space;
             return (
               <button
@@ -210,14 +210,17 @@ export default function StaffDashboardPage() {
                   // Reset states on toggle
                   setSelectedStudent(null);
                   setStudentSearchQuery('');
+                  setIsIssuingNewCard(false);
                 }}
-                className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase border transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-6 py-3 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap border-b-2 -mb-[2px] flex items-center gap-2 ${
                   isSelected
-                    ? 'bg-white border-white text-zinc-950 font-bold'
-                    : 'bg-zinc-900/20 border-white/3 text-zinc-400 hover:text-zinc-200 hover:border-white/8'
+                    ? 'border-primary bg-surface/50 text-foreground font-bold'
+                    : 'border-transparent text-text-muted hover:text-foreground hover:bg-surface/20'
                 }`}
               >
-                {space === 'pos' ? 'POS Terminal' : 'Token Hub'}
+                {space === 'pos' && <span>🍽️ Order</span>}
+                {space === 'tokens' && <span>💳 Cards</span>}
+                {space === 'history' && <span>📋 History</span>}
               </button>
             );
           })}
@@ -225,80 +228,60 @@ export default function StaffDashboardPage() {
 
         {/* 1. POS TERMINAL WORKSPACE */}
         {activeWorkspace === 'pos' && (
-          <div className="flex flex-col gap-6 animate-slide-in">
-            {/* Table Selector */}
-            <TableSelector />
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden animate-slide-in">
+            {/* Table Selector (Top zone - dynamic height) */}
+            <div className="shrink-0">
+              <TableSelector />
+            </div>
 
-            {/* Column Splits */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-              {/* Menu Column */}
-              <div className="lg:col-span-3 flex flex-col gap-4">
-                {/* Categories & Add Item Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-3.5">
+            {/* Bottom zone (fills remaining screen, split between menu and cart) */}
+            <div className="flex-1 flex overflow-hidden gap-6 min-h-0">
+              {/* Menu items column */}
+              <div className="flex-1 flex flex-col overflow-hidden gap-3">
+                {/* Categories & Filter Bar (shrink-0) */}
+                <div className="shrink-0 flex items-center justify-between border-b border-border pb-2.5">
                   <div className="flex gap-2.5 overflow-x-auto pb-1.5 flex-1">
                     {categories.map((cat) => {
                       const isSelected = activeCategory === cat;
+                      const getCategoryLabel = (name: string) => {
+                        const lower = name.toLowerCase();
+                        if (lower === 'all') return 'All';
+                        if (lower.includes('burger')) return '🍔 Burgers';
+                        if (lower.includes('snack') || lower.includes('side')) return '🍟 Snacks';
+                        if (lower.includes('drink') || lower.includes('beverage')) return '🥤 Drinks';
+                        if (lower.includes('combo')) return '🍱 Combos';
+                        return `🍽️ ${name}`;
+                      };
                       return (
                         <button
                           key={cat}
                           onClick={() => setActiveCategory(cat)}
-                          className={`px-4.5 py-2 rounded-full text-[10px] font-extrabold uppercase border transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                          className={`px-4.5 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
                             isSelected 
-                              ? 'bg-gradient-to-r from-orange-500 to-rose-500 border-transparent text-white font-extrabold shadow-[0_4px_12px_rgba(249,115,22,0.15)]'
-                              : 'bg-zinc-900/40 border-white/4 text-zinc-400 hover:text-zinc-200 hover:border-white/8 hover:bg-zinc-900/60'
+                              ? 'bg-primary border-transparent text-white shadow-[0_4px_12px_rgba(224,123,57,0.15)]'
+                              : 'bg-surface border-border text-text-muted hover:text-foreground hover:border-text-muted/30'
                           }`}
                         >
-                          {cat}
+                          {getCategoryLabel(cat)}
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Menu Items Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {filteredMenu.map((item) => (
-                    <MenuItemCard key={item.id} item={item} />
-                  ))}
-                </div>
-
-                {/* Recent Orders area */}
-                <div className="minimal-card p-5 rounded-md mt-4">
-                  <h2 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400 mb-3">
-                    Shift Activity
-                  </h2>
-                  
-                  {staffOrders.length === 0 ? (
-                    <p className="text-[10px] text-zinc-600 font-bold py-2 uppercase">No orders placed during this shift</p>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {staffOrders.map((order) => (
-                        <div 
-                          key={order.id} 
-                          className="bg-zinc-900/10 border border-white/2 px-4 py-3 rounded-sm flex items-center justify-between text-xs"
-                        >
-                          <div className="flex flex-col">
-                            <span className="font-bold text-zinc-200">{order.id}</span>
-                            <span className="text-[10px] text-zinc-500 mt-0.5">
-                              {order.tableNumber} • {order.items.length} items • {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold text-zinc-100 font-mono">₹{order.total.toFixed(2)}</span>
-                            <StatusBadge status={order.orderStatus} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                {/* Menu items list (internal scroll) */}
+                <div className="flex-1 overflow-y-auto pr-1 pb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredMenu.map((item) => (
+                      <MenuItemCard key={item.id} item={item} />
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Cart Column (Desktop) */}
-              <div className="hidden lg:block lg:col-span-1 h-full">
-                <div className="sticky top-24 h-[calc(100vh-140px)]">
-                  <CartPanel />
-                </div>
+              {/* Cart Column (Desktop, always visible, full height) */}
+              <div className="hidden lg:block w-80 xl:w-96 shrink-0 h-full overflow-hidden">
+                <CartPanel />
               </div>
             </div>
           </div>
@@ -306,294 +289,329 @@ export default function StaffDashboardPage() {
 
         {/* 2. TOKEN HUB WORKSPACE */}
         {activeWorkspace === 'tokens' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-in">
-            {/* Left Column: Search & Profile & Transactions */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
+          <div className="flex-1 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-in">
+              {/* Left Column: Search & Selected Student details (2/3 width) */}
+              <div className="lg:col-span-2 flex flex-col gap-6">
+                
+                {/* Monthly Quota Card */}
+                <div className="minimal-card p-5 rounded-xl relative overflow-hidden bg-surface border border-border">
+                  <div className="absolute -right-10 -top-10 w-28 h-28 bg-primary/5 rounded-full blur-xl pointer-events-none" />
+                  <div className="flex items-start justify-between mb-4 relative z-10">
+                    <div>
+                      <span className="text-xs text-foreground font-bold block">Monthly Token Quota</span>
+                      <span className="text-xs text-text-muted mt-0.5 block">Token sales quota for {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
+                    </div>
+                    <div className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${
+                      isPurseOverLimit ? 'bg-error/10 text-error border-error/20' : isPurseNearLimit ? 'bg-warning/10 text-warning border-warning/20' : 'bg-success/10 text-[#71d384] border-[#22c55e]/20'
+                    }`}>
+                      {isPurseOverLimit ? 'Limit Reached' : isPurseNearLimit ? 'Near Limit' : 'Available'}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mb-4 relative z-10">
+                    <div className="bg-surface-container/40 border border-border rounded-xl p-3 flex flex-col gap-1">
+                      <span className="text-xs text-text-muted font-bold">Remaining</span>
+                      <span className={`text-2xl font-bold font-mono ${isPurseOverLimit ? 'text-error' : isPurseNearLimit ? 'text-warning' : 'text-primary'}`}>{monthlyRemaining.toFixed(0)}</span>
+                      <span className="text-[10px] text-text-muted">tokens left</span>
+                    </div>
+                    <div className="bg-surface-container/40 border border-border rounded-xl p-3 flex flex-col gap-1">
+                      <span className="text-xs text-text-muted font-bold">Used</span>
+                      <span className="text-2xl font-bold font-mono text-foreground">{monthTokensSold.toFixed(0)}</span>
+                      <span className="text-[10px] text-text-muted">tokens sold</span>
+                    </div>
+                    <div className="bg-surface-container/40 border border-border rounded-xl p-3 flex flex-col gap-1">
+                      <span className="text-xs text-text-muted font-bold">Monthly Cap</span>
+                      <span className="text-2xl font-bold font-mono text-text-muted">{monthlyLimit}</span>
+                      <span className="text-[10px] text-text-muted">token limit</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 relative z-10">
+                    <div className="flex justify-between">
+                      <span className="text-xs text-text-muted font-bold">Usage</span>
+                      <span className={`text-xs font-mono font-bold ${isPurseOverLimit ? 'text-error' : isPurseNearLimit ? 'text-warning' : 'text-text-muted'}`}>{monthlyUsagePct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden border border-border">
+                      <div
+                        style={{ width: `${monthlyUsagePct}%` }}
+                        className={`h-full rounded-full transition-all duration-700 ${
+                          isPurseOverLimit ? 'bg-error' : isPurseNearLimit ? 'bg-warning' : 'bg-primary'
+                        }`}
+                      />
+                    </div>
+                    {isPurseOverLimit && <p className="text-xs text-error font-semibold mt-1">&#9888; Monthly limit reached. Token sales are blocked until next month or the owner raises your limit.</p>}
+                    {isPurseNearLimit && !isPurseOverLimit && <p className="text-xs text-warning font-semibold mt-1">&#9888; You are close to your monthly limit. Contact the owner to increase it if needed.</p>}
+                  </div>
+                </div>
 
-              {/* Monthly Purse Card */}
-              <div className="minimal-card p-5 rounded-xl relative overflow-hidden">
-                <div className="absolute -right-10 -top-10 w-28 h-28 bg-blue-500/5 rounded-full blur-xl pointer-events-none" />
-                <div className="flex items-start justify-between mb-4 relative z-10">
-                  <div>
-                    <span className="text-[9px] uppercase font-extrabold tracking-widest text-zinc-500 block">My Monthly Token Purse</span>
-                    <span className="text-[10px] text-zinc-600 mt-0.5 block">Token sales quota for {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-                  </div>
-                  <div className={`text-[8px] px-2.5 py-1 rounded-full font-black uppercase border ${
-                    isPurseOverLimit ? 'bg-red-500/10 text-red-400 border-red-500/20' : isPurseNearLimit ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  }`}>
-                    {isPurseOverLimit ? 'Limit Reached' : isPurseNearLimit ? 'Near Limit' : 'Available'}
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3 mb-4 relative z-10">
-                  <div className="bg-zinc-950/60 border border-white/5 rounded-xl p-3 flex flex-col gap-1">
-                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">Remaining</span>
-                    <span className={`text-2xl font-black font-mono ${isPurseOverLimit ? 'text-red-400' : isPurseNearLimit ? 'text-amber-400' : 'text-blue-400'}`}>{monthlyRemaining.toFixed(0)}</span>
-                    <span className="text-[8px] text-zinc-600">tokens left</span>
-                  </div>
-                  <div className="bg-zinc-950/60 border border-white/5 rounded-xl p-3 flex flex-col gap-1">
-                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">Used</span>
-                    <span className="text-2xl font-black font-mono text-zinc-300">{monthTokensSold.toFixed(0)}</span>
-                    <span className="text-[8px] text-zinc-600">tokens sold</span>
-                  </div>
-                  <div className="bg-zinc-950/60 border border-white/5 rounded-xl p-3 flex flex-col gap-1">
-                    <span className="text-[7px] uppercase text-zinc-500 font-bold tracking-wider">Monthly Cap</span>
-                    <span className="text-2xl font-black font-mono text-zinc-400">{monthlyLimit}</span>
-                    <span className="text-[8px] text-zinc-600">token limit</span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1.5 relative z-10">
-                  <div className="flex justify-between">
-                    <span className="text-[8px] uppercase text-zinc-600 font-bold">Usage</span>
-                    <span className={`text-[9px] font-mono font-bold ${isPurseOverLimit ? 'text-red-400' : isPurseNearLimit ? 'text-amber-400' : 'text-zinc-400'}`}>{monthlyUsagePct.toFixed(0)}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                    <div
-                      style={{ width: `${monthlyUsagePct}%` }}
-                      className={`h-full rounded-full transition-all duration-700 ${
-                        isPurseOverLimit ? 'bg-gradient-to-r from-red-500 to-red-600' : isPurseNearLimit ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-blue-400 to-indigo-500'
-                      }`}
+                {/* Search Card Panel (Autocomplete) */}
+                <div className="minimal-card p-5 rounded-xl flex flex-col gap-4 bg-surface border border-border relative z-30">
+                  <h3 className="text-xs text-foreground font-bold">
+                    Search Card
+                  </h3>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search by name or 3-digit card number..."
+                      value={studentSearchQuery}
+                      onChange={(e) => handleStudentSearch(e.target.value)}
+                      className="minimal-input pl-10 pr-4 py-3 text-xs text-white placeholder-text-muted/50 w-full font-semibold"
                     />
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted font-bold select-none pointer-events-none">🔍</span>
+                    
+                    {/* Autocomplete Results Dropdown */}
+                    {studentSearchQuery && searchedStudents.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 border border-border rounded-lg bg-surface divide-y divide-border max-h-48 overflow-y-auto shadow-2xl animate-fade-in z-30">
+                        {searchedStudents.map(student => (
+                          <button
+                            key={student.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedStudent(student);
+                              setStudentSearchQuery('');
+                              setRechargeTokens('');
+                              setRechargeAmount('');
+                              setIsIssuingNewCard(false);
+                            }}
+                            className="w-full text-left px-4.5 py-3 hover:bg-surface-container/30 transition-colors flex justify-between items-center text-xs cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-foreground">{student.name}</span>
+                              <span className="text-[10px] font-mono text-text-muted font-bold bg-surface border border-border px-1.5 py-0.2 rounded">
+                                #{student.cardNo}
+                              </span>
+                            </div>
+                            <span className="bg-blue-500/10 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-bold text-[10px] font-mono">
+                              {student.tokens.toFixed(2)} TK
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {studentSearchQuery && searchedStudents.length === 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 border border-border rounded-lg bg-surface p-4 text-center text-xs text-text-muted font-medium z-30 shadow-2xl">
+                        No matching cards found
+                      </div>
+                    )}
                   </div>
-                  {isPurseOverLimit && <p className="text-[9px] text-red-400 font-bold">&#9888; Monthly limit reached. Token sales are blocked until next month or the owner raises your limit.</p>}
-                  {isPurseNearLimit && !isPurseOverLimit && <p className="text-[9px] text-amber-400 font-bold">&#9888; You are close to your monthly limit. Contact the owner to increase it if needed.</p>}
-                </div>
-              </div>
-              {/* Search Panel */}
-              <div className="minimal-card p-5 rounded-md flex flex-col gap-4">
-                <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
-                  Search Student Card
-                </h3>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Enter student name or 3-digit card number..."
-                    value={studentSearchQuery}
-                    onChange={(e) => handleStudentSearch(e.target.value)}
-                    className="minimal-input pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-700 w-full"
-                  />
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 font-bold select-none pointer-events-none">🔍</span>
                 </div>
 
-                {/* Search Results Dropdown/List */}
-                {studentSearchQuery && searchedStudents.length > 0 && (
-                  <div className="border border-white/5 rounded-lg bg-zinc-950/80 backdrop-blur-md divide-y divide-white/2 max-h-48 overflow-y-auto mt-2 shadow-xl animate-fade-in relative z-20">
-                    {searchedStudents.map(student => (
-                      <button
-                        key={student.id}
-                        onClick={() => {
-                          setSelectedStudent(student);
-                          setStudentSearchQuery('');
-                          setRechargeTokens('');
-                          setRechargeAmount('');
-                        }}
-                        className="w-full text-left px-4.5 py-3 hover:bg-white/5 transition-colors flex justify-between items-center text-xs cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-zinc-200">{student.name}</span>
-                          <span className="text-[9px] font-mono text-zinc-550 font-bold bg-zinc-900 border border-white/4 px-1.5 py-0.2 rounded">
-                            #{student.cardNo}
+                {/* Selected Student Details (Persistent if selected) */}
+                {selectedStudent ? (
+                  <div className="minimal-card rounded-xl overflow-hidden flex flex-col bg-surface border border-border">
+                    <div className="bg-surface-header/80 px-5 py-4 border-b border-border flex justify-between items-center">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-bold text-text-muted">Student Profile</span>
+                        <span className="text-sm font-bold text-foreground mt-0.5">{selectedStudent.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-mono font-bold text-primary">Card #{selectedStudent.cardNo}</span>
+                        <button
+                          onClick={() => setSelectedStudent(null)}
+                          className="text-[10px] text-text-muted hover:text-primary font-bold cursor-pointer transition-colors"
+                        >
+                          Clear Selection
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-5 flex flex-col gap-6">
+                      {/* Current Balance */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-surface-container/40 border border-border p-4 rounded-lg flex flex-col justify-center">
+                          <span className="text-[9px] text-text-muted font-bold">Current Balance</span>
+                          <span className="text-lg font-bold text-primary font-mono mt-1">
+                            {selectedStudent.tokens} tokens
                           </span>
                         </div>
-                        <span className="bg-blue-500/10 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-black text-[9px] font-mono">
-                          {student.tokens.toFixed(2)} TK
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                        <div className="bg-surface-container/40 border border-border p-4 rounded-lg flex flex-col justify-center">
+                          <span className="text-[9px] text-text-muted font-bold">Equivalent Value</span>
+                          <span className="text-lg font-bold text-[#71d384] font-mono mt-1">
+                            ₹{(selectedStudent.tokens * 30).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
 
-                {studentSearchQuery && searchedStudents.length === 0 && (
-                  <div className="p-4 text-center text-xs text-zinc-600 font-bold uppercase mt-2">
-                    No matching student cards found
+                      {/* Tokens Taken / Recharge History */}
+                      <div className="flex flex-col gap-3">
+                        <h4 className="text-[10px] font-bold text-foreground">
+                          Recharge History
+                        </h4>
+                        
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          {studentTransactions.length === 0 ? (
+                            <div className="p-6 text-center text-text-muted italic font-semibold text-xs bg-surface-container/10">
+                              No recharge history found for this card
+                            </div>
+                          ) : (
+                            <div className="max-h-60 overflow-y-auto">
+                              <table className="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr className="border-b border-border bg-surface-header/60 text-text-muted">
+                                      <th className="p-2.5 font-bold">Date & Time</th>
+                                      <th className="p-2.5 font-bold">Tokens Added</th>
+                                      <th className="p-2.5 font-bold">Amount Paid</th>
+                                      <th className="p-2.5 font-bold">Operator</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border bg-surface-container/10">
+                                    {studentTransactions.map((tx) => (
+                                      <tr key={tx.id} className="hover:bg-surface-container/20 transition-colors">
+                                        <td className="p-2.5 text-text-muted font-medium">
+                                          {new Date(tx.createdAt).toLocaleString([], {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}
+                                        </td>
+                                        <td className="p-2.5 text-primary font-mono font-bold">+{tx.tokens} tokens</td>
+                                        <td className="p-2.5 text-success font-mono font-bold">₹{tx.amount.toFixed(2)}</td>
+                                        <td className="p-2.5 text-foreground font-semibold">{tx.soldBy}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="minimal-card p-8 rounded-xl text-center opacity-75 flex flex-col items-center justify-center bg-surface border border-border">
+                    <span className="text-foreground font-bold text-sm">No Card Selected</span>
+                    <span className="text-xs text-text-muted mt-1 max-w-xs mx-auto">Search and select a card above to recharge or view recharge logs.</span>
                   </div>
                 )}
               </div>
 
-              {/* Selected Student Profile */}
-              {selectedStudent ? (
-                <div className="minimal-card rounded-md overflow-hidden flex flex-col">
-                  <div className="bg-zinc-950/80 px-5 py-4 border-b border-white/3 flex justify-between items-center">
-                    <div className="flex flex-col">
-                      <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Student Profile</span>
-                      <span className="text-sm font-bold text-white mt-0.5">{selectedStudent.name}</span>
+              {/* Right Column: Sell Tokens Form OR Option to Issue Card (1/3 width) */}
+              <div className="flex flex-col gap-6">
+                
+                {selectedStudent ? (
+                  /* Sell Tokens Form */
+                  <div className="minimal-card rounded-xl overflow-hidden flex flex-col bg-surface border border-border">
+                    <div className="bg-surface-header/80 px-4 py-3 border-b border-border">
+                      <h3 className="text-xs font-bold text-foreground">
+                        Sell Tokens (Recharge Card)
+                      </h3>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-mono font-bold text-blue-400">Card #{selectedStudent.cardNo}</span>
+
+                    <form onSubmit={handleSellSubmit} className="p-5 flex flex-col gap-4 text-xs">
+                      {/* Bidirectional Inputs */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] text-text-muted font-bold">
+                            Tokens to Add
+                          </label>
+                          <div className="relative flex items-center">
+                            <input
+                              type="number"
+                              step="0.01"
+                              required
+                              min="0.01"
+                              placeholder="e.g. 10"
+                              value={rechargeTokens}
+                              onChange={(e) => handleRechargeTokensChange(e.target.value)}
+                              className="minimal-input pl-3.5 pr-8 py-2.5 text-xs text-white placeholder-text-muted/30 font-mono w-full"
+                            />
+                            <span className="absolute right-2.5 text-[10px] text-text-muted font-bold select-none pointer-events-none">
+                              TK
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] text-text-muted font-bold">
+                            Amount (₹)
+                          </label>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3 text-xs text-text-muted font-bold pointer-events-none">
+                              ₹
+                            </span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              required
+                              min="0.3"
+                              placeholder="e.g. 300"
+                              value={rechargeAmount}
+                              onChange={(e) => handleRechargeAmountChange(e.target.value)}
+                              className="minimal-input pl-6 pr-3.5 py-2.5 text-xs text-white placeholder-text-muted/30 font-mono w-full"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className="text-[10px] text-text-muted font-semibold">
+                        Exchange rate: 1 Token = ₹30.00. Updates card balance instantly.
+                      </span>
+
                       <button
-                        onClick={() => setSelectedStudent(null)}
-                        className="text-[9px] text-zinc-500 hover:text-orange-450 uppercase font-extrabold tracking-widest cursor-pointer"
+                        type="submit"
+                        className="minimal-btn-primary w-full text-white font-bold py-2.5 rounded-lg transition-all active:scale-[0.98] text-xs h-11 flex items-center justify-center cursor-pointer mt-2"
                       >
-                        ✕ Clear Selection
+                        Sell & Recharge Card
                       </button>
-                    </div>
+                    </form>
                   </div>
-
-                  <div className="p-5 flex flex-col gap-6">
-                    {/* Current Balance */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-zinc-900/30 border border-white/2 p-4 rounded-sm flex flex-col justify-center">
-                        <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Current Balance</span>
-                        <span className="text-lg font-black text-blue-400 font-mono mt-1">
-                          {selectedStudent.tokens} tokens
-                        </span>
+                ) : (
+                  /* Issue New Card Area */
+                  <div className="flex flex-col gap-4">
+                    {!isIssuingNewCard ? (
+                      <div className="minimal-card p-6 rounded-xl bg-surface border border-border flex flex-col items-center justify-center text-center gap-3">
+                        <span className="text-xl">💳</span>
+                        <div>
+                          <h4 className="text-xs font-bold text-foreground">Need a new card?</h4>
+                          <p className="text-[10px] text-text-muted mt-1">Register a student and issue a physical loyalty card pass.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsIssuingNewCard(true)}
+                          className="minimal-btn-primary w-full font-bold text-xs h-10 mt-1 cursor-pointer flex items-center justify-center"
+                        >
+                          + Issue New Card
+                        </button>
                       </div>
-                      <div className="bg-zinc-900/30 border border-white/2 p-4 rounded-sm flex flex-col justify-center">
-                        <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider">Equivalent Value</span>
-                        <span className="text-lg font-black text-emerald-400 font-mono mt-1">
-                          ₹{(selectedStudent.tokens * 30).toFixed(2)}
-                        </span>
+                    ) : (
+                      <div className="relative">
+                        <TokenAccountForm
+                          editingToken={null}
+                          onCancelEdit={() => setIsIssuingNewCard(false)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIsIssuingNewCard(false)}
+                          className="absolute top-3.5 right-4 text-xs font-bold text-text-muted hover:text-foreground cursor-pointer z-10"
+                        >
+                          Cancel
+                        </button>
                       </div>
-                    </div>
-
-                    {/* Tokens Taken / Recharge History */}
-                    <div className="flex flex-col gap-3">
-                      <h4 className="text-[9px] uppercase font-bold tracking-widest text-zinc-400">
-                        Tokens Taken (Recharge History)
-                      </h4>
-                      
-                      <div className="border border-white/3 rounded-sm overflow-hidden">
-                        {studentTransactions.length === 0 ? (
-                          <div className="p-6 text-center text-zinc-600 italic font-bold uppercase tracking-wider text-[9px] bg-zinc-950/10">
-                            No recharge history found for this card
-                          </div>
-                        ) : (
-                          <div className="max-h-60 overflow-y-auto">
-                            <table className="w-full text-left border-collapse text-[10px]">
-                              <thead>
-                                  <tr className="border-b border-white/3 bg-zinc-950/60 text-zinc-500">
-                                    <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Date & Time</th>
-                                    <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Tokens Added</th>
-                                    <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Amount Paid</th>
-                                    <th className="p-2.5 font-bold uppercase tracking-wider text-[8px]">Operator</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/2 bg-zinc-950/10">
-                                  {studentTransactions.map((tx) => (
-                                    <tr key={tx.id} className="hover:bg-white/1 transition-colors">
-                                      <td className="p-2.5 text-zinc-500 font-medium">
-                                        {new Date(tx.createdAt).toLocaleString([], {
-                                          month: 'short',
-                                          day: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit'
-                                        })}
-                                      </td>
-                                      <td className="p-2.5 text-blue-400 font-mono font-bold">+{tx.tokens} tokens</td>
-                                      <td className="p-2.5 text-emerald-400 font-mono font-bold">₹{tx.amount.toFixed(2)}</td>
-                                      <td className="p-2.5 text-zinc-400 font-semibold">{tx.soldBy}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    )}
                   </div>
-                </div>
-              ) : (
-                <div className="minimal-card p-8 rounded-md text-center opacity-65 flex flex-col items-center justify-center">
-                  <span className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">No Student Selected</span>
-                  <span className="text-[9px] text-zinc-600 mt-1">Search and select a student card above to recharge or view recharge logs.</span>
-                </div>
-              )}
-            </div>
+                )}
 
-            {/* Right Column: Sell Tokens Form & Shift Sales Summary */}
-            <div className="flex flex-col gap-6">
-              {/* Sell Tokens Form */}
-              {selectedStudent ? (
-                <div className="minimal-card rounded-md overflow-hidden flex flex-col">
-                  <div className="bg-zinc-950/80 px-4 py-3 border-b border-white/3">
-                    <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
-                      Sell Tokens (Recharge Card)
+                {/* Shift Token Sales Summary */}
+                <div className="minimal-card rounded-xl overflow-hidden flex flex-col bg-surface border border-border">
+                  <div className="bg-surface-header/80 px-4 py-3 border-b border-border">
+                    <h3 className="text-xs font-bold text-foreground">
+                      Your Shift Token Sales
                     </h3>
                   </div>
-
-                  <form onSubmit={handleSellSubmit} className="p-5 flex flex-col gap-4 text-xs">
-                    {/* Bidirectional Inputs */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">
-                          Tokens to Add
-                        </label>
-                        <div className="relative flex items-center">
-                          <input
-                            type="number"
-                            step="0.01"
-                            required
-                            min="0.01"
-                            placeholder="e.g. 10"
-                            value={rechargeTokens}
-                            onChange={(e) => handleRechargeTokensChange(e.target.value)}
-                            className="minimal-input pl-3.5 pr-8 py-2.5 text-xs text-white placeholder-zinc-700 font-mono w-full"
-                          />
-                          <span className="absolute right-2.5 text-[9px] text-zinc-500 font-bold uppercase select-none pointer-events-none">
-                            TK
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">
-                          Amount (₹)
-                        </label>
-                        <div className="relative flex items-center">
-                          <span className="absolute left-3 text-[10px] text-zinc-500 font-bold pointer-events-none">
-                            ₹
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            required
-                            min="0.3"
-                            placeholder="e.g. 300"
-                            value={rechargeAmount}
-                            onChange={(e) => handleRechargeAmountChange(e.target.value)}
-                            className="minimal-input pl-6 pr-3.5 py-2.5 text-xs text-white placeholder-zinc-700 font-mono w-full"
-                          />
-                        </div>
-                      </div>
+                  <div className="p-5 flex flex-col gap-4">
+                    <div className="bg-surface-container/40 border border-border p-3.5 rounded-lg flex justify-between items-center">
+                      <span className="text-xs text-text-muted font-bold">Tokens Sold</span>
+                      <span className="font-mono font-bold text-sm text-primary">
+                        {shiftTokensSold.toFixed(2)} tokens
+                      </span>
                     </div>
-
-                    <span className="text-[8px] text-zinc-600 font-semibold">
-                      Exchange rate: 1 Token = ₹30.00. Updates card balance instantly.
-                    </span>
-
-                    <button
-                      type="submit"
-                      className="minimal-btn-primary w-full text-white font-bold py-2.5 rounded-sm uppercase tracking-wider transition-transform active:scale-[0.98] text-[10px] h-10 flex items-center justify-center cursor-pointer mt-2"
-                    >
-                      ⚡ Sell & Recharge Card
-                    </button>
-                  </form>
-                </div>
-              ) : (
-                <TokenAccountForm
-                  editingToken={null}
-                  onCancelEdit={() => {}}
-                />
-              )}
-
-              {/* Shift Token Sales Summary */}
-              <div className="minimal-card rounded-md overflow-hidden flex flex-col">
-                <div className="bg-zinc-950/80 px-4 py-3 border-b border-white/3">
-                  <h3 className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">
-                    Your Shift Token Sales
-                  </h3>
-                </div>
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="bg-[#141416] border border-white/3 p-3.5 rounded-sm flex justify-between items-center">
-                    <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">Tokens Sold</span>
-                    <span className="font-mono font-bold text-xs text-blue-400">
-                      {shiftTokensSold.toFixed(2)} tokens
-                    </span>
-                  </div>
-                  <div className="bg-[#141416] border border-white/3 p-3.5 rounded-sm flex justify-between items-center">
-                    <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">Rupees Collected</span>
-                    <span className="font-mono font-bold text-xs text-emerald-400">
-                      ₹{shiftRupeesCollected.toFixed(2)}
-                    </span>
+                    <div className="bg-surface-container/40 border border-border p-3.5 rounded-lg flex justify-between items-center">
+                      <span className="text-xs text-text-muted font-bold">Rupees Collected</span>
+                      <span className="font-mono font-bold text-sm text-[#71d384]">
+                        ₹{shiftRupeesCollected.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -601,24 +619,79 @@ export default function StaffDashboardPage() {
           </div>
         )}
 
-        {/* 3. PROFILE WORKSPACE */}
+        {/* 3. HISTORY WORKSPACE */}
+        {activeWorkspace === 'history' && (
+          <div className="flex-1 overflow-y-auto pr-1 animate-slide-in max-w-4xl mx-auto w-full">
+            <div className="minimal-card p-6 rounded-xl bg-surface border border-border">
+              <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
+                <div>
+                  <h2 className="text-sm text-foreground font-bold">
+                    Today's Placed Orders
+                  </h2>
+                  <p className="text-xs text-text-muted mt-0.5">Recent orders fulfilled or pending during this shift</p>
+                </div>
+                <span className="text-xs font-mono text-text-muted font-bold bg-surface-header border border-border px-3 py-1 rounded-lg">
+                  Total Orders: {staffOrders.length}
+                </span>
+              </div>
+              
+              {staffOrders.length === 0 ? (
+                <div className="py-12 text-center text-xs text-text-muted font-medium">
+                  No orders placed during this shift yet
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {[...staffOrders].reverse().map((order) => (
+                    <div 
+                      key={order.id} 
+                      className="bg-surface-container/20 border border-border px-4 py-3.5 rounded-lg flex items-center justify-between text-xs hover:border-text-muted/30 transition-colors"
+                    >
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-foreground">Order #{order.id.replace('HH-', '')}</span>
+                          <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded font-mono font-bold">
+                            {order.tableNumber}
+                          </span>
+                        </div>
+                        <span className="text-xs text-text-muted font-semibold">
+                          {order.items.map(i => `${i.name} (${i.quantity})`).join(', ')}
+                        </span>
+                        <span className="text-[10px] text-text-muted font-medium">
+                          Placed at {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold text-foreground font-mono text-sm">₹{order.total.toFixed(2)}</span>
+                        <StatusBadge status={order.orderStatus} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 4. PROFILE WORKSPACE */}
         {activeWorkspace === 'profile' && (
-          <ProfileSection />
+          <div className="flex-1 overflow-y-auto">
+            <ProfileSection />
+          </div>
         )}
       </main>
 
       {/* Floating Bottom Cart Bar for Mobile */}
       {activeWorkspace === 'pos' && activeTable && cartItemsCount > 0 && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-zinc-950 border-t border-white/3 p-3.5 flex justify-between items-center z-40">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-3.5 flex justify-between items-center z-45">
           <div className="flex flex-col">
-            <span className="text-[9px] text-zinc-500 uppercase font-bold">{activeTable}</span>
-            <span className="text-xs font-bold text-white">
+            <span className="text-[10px] text-text-muted font-bold">{activeTable}</span>
+            <span className="text-xs font-bold text-foreground">
               {cartItemsCount} {cartItemsCount === 1 ? 'Item' : 'Items'} • ₹{cartTotal.toFixed(2)}
             </span>
           </div>
           <button
             onClick={() => setIsMobileCartOpen(true)}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-sm font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+            className="bg-primary hover:bg-primary-hover text-white px-5 py-2 rounded-lg font-bold text-xs transition-colors cursor-pointer"
           >
             View Order
           </button>
@@ -628,7 +701,7 @@ export default function StaffDashboardPage() {
       {/* Mobile Cart Drawer Overlay */}
       {isMobileCartOpen && (
         <div className="lg:hidden fixed inset-0 bg-black/80 z-50 flex flex-col justify-end">
-          <div className="bg-[#1c1b1b] max-h-[85vh] rounded-t-lg overflow-hidden flex flex-col animate-slide-in">
+          <div className="bg-surface max-h-[85vh] rounded-t-xl overflow-hidden flex flex-col animate-slide-in">
             <div className="h-full flex-1">
               <CartPanel onClose={() => setIsMobileCartOpen(false)} />
             </div>
