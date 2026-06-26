@@ -20,6 +20,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
 
   const cartItems = activeTable ? tableCarts[activeTable] || [] : [];
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const requiredTokens = Math.round((subtotal / 30) * 100) / 100;
 
   const isValid = 
     activeTable !== null && 
@@ -197,6 +198,19 @@ export function CartPanel({ onClose }: CartPanelProps) {
               })}
             </div>
           </div>
+
+          {paymentMode === 'tokens' && (
+            <div className="flex flex-col gap-1.5 bg-zinc-900/10 border border-white/2 p-2.5 rounded-sm animate-fade-in mt-1">
+              <div className="flex justify-between items-center text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                <span>Token Amount</span>
+                <span className="font-mono text-zinc-600 font-medium">Rate: ₹30/token</span>
+              </div>
+              <div className="flex justify-between items-center font-mono text-xs">
+                <span className="text-zinc-400 font-sans font-semibold text-[10px] uppercase">Required:</span>
+                <span className="text-blue-400 font-bold">{requiredTokens} TK</span>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
