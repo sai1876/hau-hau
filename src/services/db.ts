@@ -1,5 +1,5 @@
 import { firestore } from './firebase';
-import { MenuItem, Order, StaffAccount } from '../types';
+import { MenuItem, Order, StaffAccount, TokenAccount } from '../types';
 import { 
   collection, 
   doc, 
@@ -15,6 +15,7 @@ import {
 const MENU_KEY = 'hau_hau_menu';
 const STAFF_KEY = 'hau_hau_staff';
 const ORDERS_KEY = 'hau_hau_orders';
+const TOKENS_KEY = 'hau_hau_tokens';
 
 // Check if Firebase is actually configured with environment variables
 export const isFirebaseConfigured = () => {
@@ -148,6 +149,9 @@ export const db = {
     if (!localStorage.getItem(ORDERS_KEY)) {
       localStorage.setItem(ORDERS_KEY, JSON.stringify([]));
     }
+    if (!localStorage.getItem(TOKENS_KEY)) {
+      localStorage.setItem(TOKENS_KEY, JSON.stringify([]));
+    }
   },
 
   // --- Real-time subscriptions ---
@@ -230,6 +234,28 @@ export const db = {
       const load = () => {
         const staff = localStorage.getItem(STAFF_KEY);
         callback(staff ? JSON.parse(staff) : DEFAULT_STAFF);
+      };
+      load();
+      window.addEventListener('storage', load);
+      return () => window.removeEventListener('storage', load);
+    }
+  },
+  
+  subscribeTokens(callback: (tokens: TokenAccount[]) => void): () => void {
+    if (isFirebaseConfigured()) {
+      const tokensCol = collection(firestore, 'tokens');
+      return onSnapshot(tokensCol, (snapshot) => {
+        const tokensList: TokenAccount[] = [];
+        snapshot.forEach((doc) => {
+          tokensList.push(doc.data() as TokenAccount);
+        });
+        callback(tokensList);
+      });
+    } else {
+      this.init();
+      const load = () => {
+        const tokens = localStorage.getItem(TOKENS_KEY);
+        callback(tokens ? JSON.parse(tokens) : []);
       };
       load();
       window.addEventListener('storage', load);
@@ -433,6 +459,50 @@ export const db = {
         return order;
       });
       localStorage.setItem(ORDERS_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+    }
+  },
+
+  // --- Tokens Write Operations ---
+  async addTokenAccount(account: Omit<TokenAccount, 'id' | 'createdAt'>): Promise<TokenAccount> {
+    const newAccount: TokenAccount = {
+      ...account,
+      id: 't_' + Math.random().toString(36).substr(2, 9),
+      createdAt: new Date().toISOString()
+    };
+
+    if (isFirebaseConfigured()) {
+      await setDoc(doc(firestore, 'tokens', newAccount.id), newAccount);
+    } else {
+      const tokens = localStorage.getItem(TOKENS_KEY);
+      const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
+      list.push(newAccount);
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
+      window.dispatchEvent(new Event('storage'));
+    }
+    return newAccount;
+  },
+
+  async updateTokenAccount(tokenId: string, updatedFields: Partial<Omit<TokenAccount, 'id'>>): Promise<void> {
+    if (isFirebaseConfigured()) {
+      await updateDoc(doc(firestore, 'tokens', tokenId), updatedFields);
+    } else {
+      const tokens = localStorage.getItem(TOKENS_KEY);
+      const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
+      const updated = list.map(t => t.id === tokenId ? { ...t, ...updatedFields } : t);
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+    }
+  },
+
+  async deleteTokenAccount(tokenId: string): Promise<void> {
+    if (isFirebaseConfigured()) {
+      await deleteDoc(doc(firestore, 'tokens', tokenId));
+    } else {
+      const tokens = localStorage.getItem(TOKENS_KEY);
+      const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
+      const updated = list.filter(t => t.id !== tokenId);
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(updated));
       window.dispatchEvent(new Event('storage'));
     }
   }

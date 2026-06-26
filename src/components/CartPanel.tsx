@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { TokenAccount } from '../types';
 
 interface CartPanelProps {
   onClose?: () => void;
@@ -13,20 +14,48 @@ export function CartPanel({ onClose }: CartPanelProps) {
     removeFromCart, 
     clearTableCart, 
     confirmOrder,
-    confirmAction
+    confirmAction,
+    tokens
   } = useApp();
 
   const [paymentMode, setPaymentMode] = useState<'cash' | 'online' | 'tokens' | null>(null);
+  const [tokensSearch, setTokensSearch] = useState('');
+  const [selectedToken, setSelectedToken] = useState<TokenAccount | null>(null);
+  const [isSearchingTokens, setIsSearchingTokens] = useState(false);
 
   const cartItems = activeTable ? tableCarts[activeTable] || [] : [];
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const isValid = activeTable !== null && cartItems.length > 0 && paymentMode !== null;
+
+  const requiredTokens = Math.round((subtotal / 30) * 100) / 100;
+  const hasSufficientTokens = selectedToken ? selectedToken.tokens >= requiredTokens : false;
+
+  const isValid = 
+    activeTable !== null && 
+    cartItems.length > 0 && 
+    paymentMode !== null &&
+    (paymentMode !== 'tokens' || (selectedToken !== null && hasSufficientTokens));
+
+  const handlePaymentModeChange = (mode: 'cash' | 'online' | 'tokens' | null) => {
+    setPaymentMode(mode);
+    if (mode !== 'tokens') {
+      setSelectedToken(null);
+      setTokensSearch('');
+      setIsSearchingTokens(false);
+    }
+  };
 
   const handleConfirm = () => {
     if (!isValid || !paymentMode) return;
-    const success = confirmOrder(paymentMode);
+    const success = confirmOrder(
+      paymentMode, 
+      selectedToken?.id, 
+      paymentMode === 'tokens' ? requiredTokens : undefined
+    );
     if (success) {
       setPaymentMode(null);
+      setSelectedToken(null);
+      setTokensSearch('');
+      setIsSearchingTokens(false);
       if (onClose) onClose();
     }
   };
@@ -54,7 +83,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
   return (
     <div className="minimal-card rounded-md h-full flex flex-col justify-between overflow-hidden">
       {/* Header */}
-      <div className="bg-zinc-950/80 px-4 py-3 border-b border-white/3 flex items-center justify-between">
+      <div className="bg-zinc-950/80 px-4 py-3 border-b border-white/3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
           <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-300 font-bold">
@@ -72,139 +101,246 @@ export function CartPanel({ onClose }: CartPanelProps) {
         )}
       </div>
 
-      {/* Cart Items List */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 min-h-[160px]">
-        {cartItems.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
-            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Cart is empty</span>
-            <p className="text-[9px] text-zinc-600 mt-0.5">Add menu items</p>
-          </div>
-        ) : (
-          cartItems.map((item) => (
-            <div 
-              key={item.menuItemId} 
-              className="flex items-center justify-between bg-zinc-900/10 p-2.5 border border-white/2 rounded-sm"
-            >
-              <div className="flex flex-col pr-2 flex-1">
-                <span className="font-bold text-xs text-zinc-200 leading-tight">
-                  {item.name}
-                </span>
-                <span className="text-[10px] text-zinc-500 font-mono mt-0.5 font-medium">
-                  ₹{item.price.toFixed(2)}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                {/* Steppers */}
-                <div className="flex items-center bg-zinc-950 border border-white/4 rounded-sm overflow-hidden h-7">
-                  <button 
-                    onClick={() => updateCartQuantity(item.menuItemId, -1)}
-                    className="w-6 h-full flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/2 transition-colors font-bold cursor-pointer"
-                  >
-                    -
-                  </button>
-                  <span className="w-7 text-center font-mono font-bold text-xs text-white">
-                    {item.quantity}
+      {/* Main Scrollable Body */}
+      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+        
+        {/* Cart Items List */}
+        <div className="p-4 flex flex-col gap-2 shrink-0">
+          {cartItems.length === 0 ? (
+            <div className="py-8 flex flex-col items-center justify-center text-center opacity-40">
+              <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Cart is empty</span>
+              <p className="text-[9px] text-zinc-600 mt-0.5">Add menu items</p>
+            </div>
+          ) : (
+            cartItems.map((item) => (
+              <div 
+                key={item.menuItemId} 
+                className="flex items-center justify-between bg-zinc-900/10 p-2.5 border border-white/2 rounded-sm"
+              >
+                <div className="flex flex-col pr-2 flex-1">
+                  <span className="font-bold text-xs text-zinc-200 leading-tight">
+                    {item.name}
                   </span>
+                  <span className="text-[10px] text-zinc-500 font-mono mt-0.5 font-medium">
+                    ₹{item.price.toFixed(2)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  {/* Steppers */}
+                  <div className="flex items-center bg-zinc-950 border border-white/4 rounded-sm overflow-hidden h-7">
+                    <button 
+                      onClick={() => updateCartQuantity(item.menuItemId, -1)}
+                      className="w-6 h-full flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/2 transition-colors font-bold cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <span className="w-7 text-center font-mono font-bold text-xs text-white">
+                      {item.quantity}
+                    </span>
+                    <button 
+                      onClick={() => updateCartQuantity(item.menuItemId, 1)}
+                      className="w-6 h-full flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/2 transition-colors font-bold cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  {/* Remove Trash */}
                   <button 
-                    onClick={() => updateCartQuantity(item.menuItemId, 1)}
-                    className="w-6 h-full flex items-center justify-center text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/2 transition-colors font-bold cursor-pointer"
+                    onClick={() => removeFromCart(item.menuItemId)}
+                    className="text-zinc-600 hover:text-red-400 transition-colors p-1 cursor-pointer"
+                    title="Remove item"
                   >
-                    +
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
                   </button>
                 </div>
-
-                {/* Remove Trash */}
-                <button 
-                  onClick={() => removeFromCart(item.menuItemId)}
-                  className="text-zinc-600 hover:text-red-400 transition-colors p-1 cursor-pointer"
-                  title="Remove item"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
               </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Payment details */}
-      <div className="bg-zinc-950/80 p-4 border-t border-white/3 flex flex-col gap-4">
-        <div className="receipt-line" />
-        
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Subtotal</span>
-          <span className="text-base font-bold text-white font-mono">₹{subtotal.toFixed(2)}</span>
-        </div>
-
-        {/* Payment selector */}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500 mb-0.5">Billing Mode</span>
-          <div className="grid grid-cols-3 gap-2">
-            {(['cash', 'online', 'tokens'] as const).map((mode) => {
-              const active = paymentMode === mode;
-              let borderClass = 'border-white/[0.03] text-zinc-500 bg-zinc-900/10 hover:bg-white/[0.01] hover:text-zinc-400';
-              let icon = null;
-
-              if (mode === 'cash') {
-                icon = (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.879c.97.97 2.63.97 3.6 0 1.18-1.18 1.18-3.1 0-4.282L10.5 10.18" />
-                  </svg>
-                );
-                if (active) borderClass = 'border-orange-500/40 text-orange-400 bg-orange-500/[0.03] font-bold';
-              } else if (mode === 'online') {
-                icon = (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6" />
-                  </svg>
-                );
-                if (active) borderClass = 'border-emerald-500/40 text-emerald-400 bg-emerald-500/[0.03] font-bold';
-              } else if (mode === 'tokens') {
-                icon = (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                );
-                if (active) borderClass = 'border-blue-500/40 text-blue-400 bg-blue-500/[0.03] font-bold';
-              }
-
-              return (
-                <button
-                  key={mode}
-                  onClick={() => setPaymentMode(mode)}
-                  disabled={cartItems.length === 0}
-                  className={`py-2 px-1 text-[9px] uppercase tracking-wider border rounded-sm transition-all flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${borderClass}`}
-                >
-                  {icon}
-                  <span>{mode}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex flex-col gap-2 mt-1">
-          <button
-            onClick={handleConfirm}
-            disabled={!isValid}
-            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-900 disabled:text-zinc-600 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-sm active:scale-[0.98] transition-transform disabled:cursor-not-allowed touch-target flex items-center justify-center cursor-pointer shadow-sm"
-          >
-            Dispatch Order
-          </button>
-          
-          {cartItems.length > 0 && (
-            <button
-              onClick={handleClear}
-              className="w-full bg-transparent hover:bg-red-500/5 text-[9px] font-bold text-red-400/60 hover:text-red-400 py-1.5 transition-colors uppercase tracking-widest cursor-pointer"
-            >
-              Clear Cart
-            </button>
+            ))
           )}
         </div>
+
+        {/* Payment & Validation details */}
+        <div className="bg-zinc-950/30 p-4 border-t border-white/3 flex flex-col gap-4 shrink-0">
+          <div className="receipt-line" />
+          
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Subtotal</span>
+            <span className="text-base font-bold text-white font-mono">₹{subtotal.toFixed(2)}</span>
+          </div>
+
+          {/* Payment selector */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500 mb-0.5">Billing Mode</span>
+            <div className="grid grid-cols-3 gap-2">
+              {(['cash', 'online', 'tokens'] as const).map((mode) => {
+                const active = paymentMode === mode;
+                let borderClass = 'border-white/[0.03] text-zinc-500 bg-zinc-900/10 hover:bg-white/[0.01] hover:text-zinc-400';
+                let icon = null;
+
+                if (mode === 'cash') {
+                  icon = (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.879c.97.97 2.63.97 3.6 0 1.18-1.18 1.18-3.1 0-4.282L10.5 10.18" />
+                    </svg>
+                  );
+                  if (active) borderClass = 'border-orange-500/40 text-orange-400 bg-orange-500/[0.03] font-bold';
+                } else if (mode === 'online') {
+                  icon = (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6" />
+                    </svg>
+                  );
+                  if (active) borderClass = 'border-emerald-500/40 text-emerald-400 bg-emerald-500/[0.03] font-bold';
+                } else if (mode === 'tokens') {
+                  icon = (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  );
+                  if (active) borderClass = 'border-blue-500/40 text-blue-400 bg-blue-500/[0.03] font-bold';
+                }
+
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => handlePaymentModeChange(mode)}
+                    disabled={cartItems.length === 0}
+                    className={`py-2 px-1 text-[9px] uppercase tracking-wider border rounded-sm transition-all flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${borderClass}`}
+                  >
+                    {icon}
+                    <span>{mode}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Token Search and Selection section */}
+          {paymentMode === 'tokens' && (
+            <div className="flex flex-col gap-2.5 bg-zinc-900/10 border border-white/2 p-3 rounded-sm animate-fade-in mt-1">
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-400">Token Validation</span>
+                <span className="text-[10px] font-mono text-zinc-500">Rate: ₹30/token</span>
+              </div>
+
+              <div className="flex justify-between items-center bg-zinc-950/40 p-2 border border-white/2 rounded-sm text-[10px]">
+                <span className="text-zinc-500 font-semibold uppercase">Required Tokens:</span>
+                <span className="font-mono font-bold text-orange-400">{requiredTokens} tokens</span>
+              </div>
+
+              {!selectedToken ? (
+                <div className="flex flex-col">
+                  <input
+                    type="text"
+                    placeholder="Type student name or 3-digit card no..."
+                    value={tokensSearch}
+                    onChange={(e) => {
+                      setTokensSearch(e.target.value);
+                      setIsSearchingTokens(true);
+                    }}
+                    className="minimal-input w-full px-3 py-2 text-xs text-white placeholder-zinc-700"
+                  />
+                  
+                  {/* Search Results Inline Dropdown */}
+                  {isSearchingTokens && tokensSearch.trim().length > 0 && (
+                    <div className="mt-1.5 bg-[#161618] border border-white/10 rounded-sm shadow-xl max-h-32 overflow-y-auto flex flex-col divide-y divide-white/2">
+                      {tokens
+                        .filter(t => 
+                          t.name.toLowerCase().includes(tokensSearch.toLowerCase()) || 
+                          t.cardNo.includes(tokensSearch)
+                        )
+                        .slice(0, 5)
+                        .map(t => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedToken(t);
+                              setIsSearchingTokens(false);
+                              setTokensSearch('');
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-white/3 flex items-center justify-between text-xs cursor-pointer text-zinc-300"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-bold">{t.name}</span>
+                              <span className="text-[9px] text-zinc-500 font-mono">Card #{t.cardNo}</span>
+                            </div>
+                            <span className="text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded-sm font-bold">
+                              {t.tokens} tokens
+                            </span>
+                          </button>
+                        ))}
+                      {tokens.filter(t => 
+                        t.name.toLowerCase().includes(tokensSearch.toLowerCase()) || 
+                        t.cardNo.includes(tokensSearch)
+                      ).length === 0 && (
+                        <div className="p-3 text-center text-[10px] text-zinc-500 italic font-semibold">
+                          No matches found
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 bg-blue-500/[0.02] border border-blue-500/20 p-2.5 rounded-sm animate-slide-in">
+                  <div className="flex justify-between items-start">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-zinc-200">{selectedToken.name}</span>
+                      <span className="text-[9px] text-zinc-500 font-mono mt-0.5">Card #{selectedToken.cardNo}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedToken(null)}
+                      className="text-[9px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-wider cursor-pointer"
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1 border-t border-white/2 text-[10px] mt-1">
+                    <span className="text-zinc-500 font-semibold uppercase">Card Balance:</span>
+                    <span className={`font-mono font-bold ${hasSufficientTokens ? 'text-blue-400' : 'text-red-400'}`}>
+                      {selectedToken.tokens} tokens (₹{(selectedToken.tokens * 30).toFixed(0)})
+                    </span>
+                  </div>
+
+                  {!hasSufficientTokens && (
+                    <div className="mt-1 bg-red-500/5 border border-red-500/20 px-2 py-1 rounded-sm text-center">
+                      <span className="text-[9px] text-red-400 font-bold uppercase">
+                        ⚠️ Insufficient Balance (Short by {(requiredTokens - selectedToken.tokens).toFixed(2)} tokens)
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Sticky Action buttons Footer */}
+      <div className="bg-zinc-950/80 p-4 border-t border-white/3 flex flex-col gap-2 shrink-0 z-10">
+        <button
+          onClick={handleConfirm}
+          disabled={!isValid}
+          className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-900 disabled:text-zinc-600 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-sm active:scale-[0.98] transition-transform disabled:cursor-not-allowed touch-target flex items-center justify-center cursor-pointer shadow-sm"
+        >
+          Dispatch Order
+        </button>
+        
+        {cartItems.length > 0 && (
+          <button
+            onClick={handleClear}
+            className="w-full bg-transparent hover:bg-red-500/5 text-[9px] font-bold text-red-400/60 hover:text-red-400 py-1.5 transition-colors uppercase tracking-widest cursor-pointer"
+          >
+            Clear Cart
+          </button>
+        )}
       </div>
     </div>
   );

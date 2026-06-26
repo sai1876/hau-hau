@@ -35,6 +35,9 @@ export interface Order {
   staffName: string;
   createdAt: string;
   completedAt?: string;
+  tokenCardNo?: string;
+  studentName?: string;
+  tokensDeducted?: number;
 }
 
 export interface StaffAccount {
@@ -46,3 +49,12 @@ export interface StaffAccount {
   status: 'active' | 'inactive';
   role?: 'staff' | 'owner';
 }
+
+export interface TokenAccount {
+  id: string;
+  name: string;
+  cardNo: string; // 3 digit card number
+  tokens: number; // Balance of tokens (1 token = ₹30)
+  createdAt: string;
+}
+

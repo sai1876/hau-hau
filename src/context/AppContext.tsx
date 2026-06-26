@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../services/db';
-import { MenuItem, Order, StaffAccount, CartItem } from '../types';
+import { MenuItem, Order, StaffAccount, CartItem, TokenAccount } from '../types';
 import { useRouter } from 'next/navigation';
 import { auth, firestore } from '@/services/firebase';
 import { 
@@ -19,6 +19,7 @@ interface AppContextType {
   menu: MenuItem[];
   orders: Order[];
   staffList: StaffAccount[];
+  tokens: TokenAccount[];
   currentUser: { name: string; role: 'staff' | 'owner'; username: string } | null;
   activeTable: string | null;
   tableCarts: Record<string, CartItem[]>; // tableNumber -> CartItem[]
@@ -34,7 +35,7 @@ interface AppContextType {
   updateCartQuantity: (itemId: string, change: number) => void;
   removeFromCart: (itemId: string) => void;
   clearTableCart: (table: string) => void;
-  confirmOrder: (paymentMode: 'cash' | 'online' | 'tokens') => boolean;
+  confirmOrder: (paymentMode: 'cash' | 'online' | 'tokens', tokenCardId?: string, tokensDeducted?: number) => boolean;
   
   // Owner actions
   toggleMenuItem: (itemId: string) => void;
@@ -47,6 +48,11 @@ interface AppContextType {
   createNewMenuItem: (item: Omit<MenuItem, 'id' | 'available'>) => Promise<MenuItem | null>;
   removeMenuItem: (itemId: string) => void;
   updateMenuItem: (itemId: string, updatedFields: Partial<Omit<MenuItem, 'id'>>) => Promise<boolean>;
+
+  // Token Management
+  createNewToken: (account: Omit<TokenAccount, 'id' | 'createdAt'>) => Promise<boolean>;
+  updateToken: (tokenId: string, updatedFields: Partial<Omit<TokenAccount, 'id'>>) => Promise<boolean>;
+  removeToken: (tokenId: string) => Promise<boolean>;
   
   // Toasts
   addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -65,6 +71,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [staffList, setStaffList] = useState<StaffAccount[]>([]);
+  const [tokens, setTokens] = useState<TokenAccount[]>([]);
   const [currentUser, setCurrentUser] = useState<AppContextType['currentUser']>(null);
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
@@ -131,6 +138,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setStaffList(updatedStaff);
     });
 
+    // 4. Subscribe to Token Accounts
+    const unsubTokens = db.subscribeTokens((updatedTokens) => {
+      setTokens(updatedTokens);
+    });
+
     // Defer state updates to prevent synchronous setState inside useEffect
     let unsubAuth = () => {};
     const timer = setTimeout(() => {
@@ -190,6 +202,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubMenu();
       unsubOrders();
       unsubStaff();
+      unsubTokens();
       unsubAuth();
       clearTimeout(timer);
     };
@@ -367,7 +380,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addToast(`Cart cleared for Table ${table}`, 'info');
   };
 
-  const confirmOrder = (paymentMode: 'cash' | 'online' | 'tokens'): boolean => {
+  const confirmOrder = (paymentMode: 'cash' | 'online' | 'tokens', tokenCardId?: string, tokensDeducted?: number): boolean => {
     if (!activeTable) {
       addToast('Table number is required.', 'error');
       return false;
@@ -386,9 +399,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const subtotal = currentCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
-    // Mock token check if tokens payment
+    let extraOrderFields = {};
+
     if (paymentMode === 'tokens') {
-      addToast('Deducted tokens from table allowance (Mock)', 'info');
+      if (!tokenCardId || tokensDeducted === undefined) {
+        addToast('Please select a valid student token card.', 'error');
+        return false;
+      }
+
+      const tokenCard = tokens.find(t => t.id === tokenCardId);
+      if (!tokenCard) {
+        addToast('Selected token card not found in database.', 'error');
+        return false;
+      }
+
+      if (tokenCard.tokens < tokensDeducted) {
+        addToast(`Insufficient balance on card (Has: ${tokenCard.tokens} tokens, Requires: ${tokensDeducted} tokens).`, 'error');
+        return false;
+      }
+
+      // Deduct balance
+      const newBalance = Math.round((tokenCard.tokens - tokensDeducted) * 100) / 100;
+      db.updateTokenAccount(tokenCardId, { tokens: newBalance });
+
+      extraOrderFields = {
+        tokenCardNo: tokenCard.cardNo,
+        studentName: tokenCard.name,
+        tokensDeducted: tokensDeducted
+      };
     }
 
     db.createOrder({
@@ -397,7 +435,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       total: subtotal,
       paymentMode,
       staffId: currentUser?.username || 's1',
-      staffName: currentUser?.name || 'Alex Johnson'
+      staffName: currentUser?.name || 'Alex Johnson',
+      ...extraOrderFields
     });
 
     // Clear cart for this table
@@ -555,12 +594,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Token Management Operations
+  const createNewToken = async (account: Omit<TokenAccount, 'id' | 'createdAt'>): Promise<boolean> => {
+    // Validate card number uniqueness
+    const exists = tokens.some(t => t.cardNo === account.cardNo);
+    if (exists) {
+      addToast(`Token card number #${account.cardNo} already exists.`, 'error');
+      return false;
+    }
+
+    try {
+      await db.addTokenAccount(account);
+      addToast(`Token card for ${account.name} created!`, 'success');
+      return true;
+    } catch {
+      addToast('Failed to create token card.', 'error');
+      return false;
+    }
+  };
+
+  const updateToken = async (tokenId: string, updatedFields: Partial<Omit<TokenAccount, 'id'>>): Promise<boolean> => {
+    // If card number is being changed, ensure it remains unique
+    if (updatedFields.cardNo) {
+      const exists = tokens.some(t => t.id !== tokenId && t.cardNo === updatedFields.cardNo);
+      if (exists) {
+        addToast(`Token card number #${updatedFields.cardNo} already exists.`, 'error');
+        return false;
+      }
+    }
+
+    try {
+      await db.updateTokenAccount(tokenId, updatedFields);
+      addToast('Token card updated successfully!', 'success');
+      return true;
+    } catch {
+      addToast('Failed to update token card.', 'error');
+      return false;
+    }
+  };
+
+  const removeToken = async (tokenId: string): Promise<boolean> => {
+    try {
+      await db.deleteTokenAccount(tokenId);
+      addToast('Token card deleted successfully.', 'success');
+      return true;
+    } catch {
+      addToast('Failed to delete token card.', 'error');
+      return false;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
         menu,
         orders,
         staffList,
+        tokens,
         currentUser,
         activeTable,
         tableCarts,
@@ -581,6 +671,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createNewMenuItem,
         removeMenuItem,
         updateMenuItem,
+        createNewToken,
+        updateToken,
+        removeToken,
         addToast,
         removeToast,
         confirmAction

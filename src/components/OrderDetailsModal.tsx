@@ -48,6 +48,13 @@ export function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
                 <span className="text-[10px] font-bold text-zinc-300 uppercase font-mono">{order.paymentMode}</span>
                 <StatusBadge status={order.paymentStatus} />
               </div>
+              {order.paymentMode === 'tokens' && order.studentName && (
+                <div className="mt-2 p-2 bg-blue-500/5 border border-blue-500/10 rounded-sm text-[9px] text-blue-400 font-mono flex flex-col gap-0.5 leading-snug">
+                  <span>Student: <strong>{order.studentName}</strong></span>
+                  <span>Card: <strong>#{order.tokenCardNo}</strong></span>
+                  <span>Deducted: <strong>{order.tokensDeducted} tokens</strong></span>
+                </div>
+              )}
             </div>
             <div className="flex flex-col">
               <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">Order Status</span>
