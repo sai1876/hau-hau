@@ -3,6 +3,11 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } f
 import { getFirestore, doc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
 
 function readEnvLocal() {
   const envPath = path.resolve(process.cwd(), '.env.local');
@@ -77,7 +82,10 @@ async function seed() {
       username: 'owner',
       role: 'owner',
       status: 'active',
-      password: 'owner123'
+      // TODO (security): Remove the 'password' field before going live with real users.
+      // Firebase Authentication manages passwords — this field is only for the dev
+      // localStorage fallback and must NOT exist in production Firestore documents.
+      password: hashPassword('owner123') // Hashed DEV/DEMO ONLY
     });
 
     // 4. Seed Staff Profile in Firestore
@@ -89,7 +97,10 @@ async function seed() {
       username: 'staff',
       role: 'staff',
       status: 'active',
-      password: 'staff123'
+      // TODO (security): Remove the 'password' field before going live with real users.
+      // See SECURITY.md for the recommended hardening steps.
+      password: hashPassword('staff123'), // Hashed DEV/DEMO ONLY
+      monthlyTokenLimit: 1000
     });
 
     // 5. Seed Menu Items
@@ -191,9 +202,12 @@ async function seed() {
     }
 
     console.log('Seeding complete! Owner and Staff accounts created in Auth and Firestore.');
-    console.log('Login credentials:');
-    console.log('  Owner: username "owner" (owner@hauhau.com) / password "owner123"');
-    console.log('  Staff: username "staff" (staff@hauhau.com) / password "staff123"');
+    console.log('Default login credentials:');
+    console.log('  Owner: owner@hauhau.com / owner123');
+    console.log('  Staff: staff@hauhau.com / staff123');
+    console.warn('⚠ SECURITY REMINDER: Change the default passwords before going live.');
+    console.warn('⚠ SECURITY REMINDER: Delete the password field from all Firestore staff documents before production.');
+    console.warn('  See SECURITY.md for the full production hardening checklist.');
     process.exit(0);
   } catch (err) {
     console.error('Seeding failed:', err);

@@ -15,6 +15,7 @@ import {
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { hashPassword } from '../utils/crypto';
 
 interface AppContextType {
   menu: MenuItem[];
@@ -266,8 +267,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           addToast('Password is required.', 'error');
           return false;
         }
-        await signInWithEmailAndPassword(auth, email, password);
+        const credential = await signInWithEmailAndPassword(auth, email, password);
         addToast('Verifying credentials...', 'info');
+
+        // Self-healing password migration in Firestore
+        try {
+          const userDocRef = doc(firestore, 'staff', credential.user.uid);
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            const profile = docSnap.data() as StaffAccount;
+            if (profile.password && !/^[a-f0-9]{64}$/i.test(profile.password)) {
+              const hashedPasswordValue = await hashPassword(password);
+              await updateDoc(userDocRef, { password: hashedPasswordValue });
+              console.log(`Auto-migrated plaintext password to SHA-256 hash for UID: ${credential.user.uid}`);
+            }
+          }
+        } catch (migrationErr) {
+          console.warn("Self-healing password migration failed:", migrationErr);
+        }
+
         return true;
       } catch (err) {
         console.warn('Auth Error:', err);
@@ -283,7 +301,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // LocalStorage fallback mode
-      if (username === 'owner' && (bypassAuth || password === 'owner' || password === 'owner123')) {
+      const inputHash = password ? await hashPassword(password) : '';
+      
+      const isOwnerBypass = bypassAuth || 
+        password === 'owner' || 
+        password === 'owner123' ||
+        inputHash === '4c1029697ee358715d3a14a2add817c4b01651440de808371f78165ac90dc581' || // 'owner'
+        inputHash === '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9';  // 'owner123'
+
+      if (username === 'owner' && isOwnerBypass) {
         const user = { name: 'Sarah (Owner)', role: 'owner' as const, username };
         setCurrentUser(user);
         localStorage.setItem('hau_hau_session', JSON.stringify(user));
@@ -292,12 +318,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
 
-      const foundStaff = staffList.find(s => s.username === username && (bypassAuth || s.password === password || s.password === 'staff123'));
+      const foundStaff = staffList.find(s => 
+        s.username === username && 
+        (
+          bypassAuth || 
+          s.password === inputHash || 
+          s.password === password || 
+          s.password === '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6' || // 'staff123'
+          s.password === 'staff123'
+        )
+      );
       if (foundStaff) {
         if (foundStaff.status === 'inactive') {
           addToast('This account is currently disabled. Please contact the owner.', 'error');
           return false;
         }
+
+        // Self-healing password migration in LocalStorage
+        if (password && !bypassAuth && !/^[a-f0-9]{64}$/i.test(foundStaff.password)) {
+          try {
+            await db.updateStaffAccount(foundStaff.id, { password: inputHash });
+            console.log(`Auto-migrated plaintext password to SHA-256 hash for local user: ${foundStaff.username}`);
+          } catch (migrationErr) {
+            console.warn("Self-healing local password migration failed:", migrationErr);
+          }
+        }
+
         const user = { name: foundStaff.name, role: 'staff' as const, username };
         setCurrentUser(user);
         localStorage.setItem('hau_hau_session', JSON.stringify(user));
@@ -339,22 +385,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (updatedFields.password) {
           try {
             await updatePassword(firebaseUser, updatedFields.password);
-          } catch (passErr: any) {
+          } catch (passErr: unknown) {
             console.error("Firebase Auth password update failed:", passErr);
-            if (passErr.code === 'auth/requires-recent-login') {
+            const firebasePassErr = passErr as { code?: string; message?: string };
+            if (firebasePassErr.code === 'auth/requires-recent-login') {
               addToast('Security check: please re-login to change password.', 'error');
             } else {
-              addToast(passErr.message || 'Failed to update password in auth system.', 'error');
+              addToast(firebasePassErr.message || 'Failed to update password in auth system.', 'error');
             }
             return false;
           }
         }
 
         const userDocRef = doc(firestore, 'staff', firebaseUser.uid);
-        const firestoreFields: any = {};
+        const firestoreFields: Record<string, string> = {};
         if (updatedFields.name) firestoreFields.name = updatedFields.name;
         if (updatedFields.emailOrPhone) firestoreFields.emailOrPhone = updatedFields.emailOrPhone;
-        if (updatedFields.password) firestoreFields.password = updatedFields.password;
+        if (updatedFields.password) firestoreFields.password = await hashPassword(updatedFields.password);
 
         await updateDoc(userDocRef, firestoreFields);
 
@@ -365,9 +412,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         addToast('Profile updated successfully!', 'success');
         return true;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Profile update failed:", err);
-        addToast(err.message || 'Failed to update profile.', 'error');
+        const profileErr = err as { message?: string };
+        addToast(profileErr.message || 'Failed to update profile.', 'error');
         return false;
       }
     } else {
@@ -377,10 +425,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
+      const hashedPass = updatedFields.password ? await hashPassword(updatedFields.password) : undefined;
       await db.updateStaffAccount(dbUser.id, {
         name: updatedFields.name,
         emailOrPhone: updatedFields.emailOrPhone,
-        password: updatedFields.password
+        password: hashedPass
       });
 
       setCurrentUser(prev => prev ? {
@@ -598,7 +647,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           name: account.name,
           emailOrPhone: account.emailOrPhone,
           username: account.username.trim().toLowerCase(),
-          password: account.password,
+          password: await hashPassword(account.password),
           status: 'active'
         });
 
@@ -620,8 +669,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // LocalStorage mode
+      const hashedPass = await hashPassword(account.password);
       db.addStaff({
         ...account,
+        password: hashedPass,
         status: 'active'
       });
       addToast(`Staff account for ${account.name} created!`, 'success');
@@ -702,7 +753,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
 
       if (currentMonthTokensSold + account.tokens > limit) {
-        addToast(`Provision exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(2)} TK`, 'error');
+        addToast(`Provision exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(2)} tokens`, 'error');
         return false;
       }
     }
@@ -712,6 +763,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Log transaction if card was initialized with tokens
       if (account.tokens > 0) {
         await db.addTokenTransaction({
+          type: 'recharge',
           studentId: createdCard.id,
           studentName: createdCard.name,
           cardNo: createdCard.cardNo,
@@ -729,6 +781,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateToken = async (tokenId: string, updatedFields: Partial<Omit<TokenAccount, 'id'>>): Promise<boolean> => {
+    // SECURITY: Only the owner can directly update a token account.
+    // Staff must go through sellTokens() which enforces monthly limits.
+    if (currentUser?.role !== 'owner') {
+      addToast('Permission denied: only the owner can edit token accounts directly.', 'error');
+      return false;
+    }
+
     // If card number is being changed, ensure it remains unique
     if (updatedFields.cardNo) {
       const exists = tokens.some(t => t.id !== tokenId && t.cardNo === updatedFields.cardNo);
@@ -739,7 +798,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      await db.updateTokenAccount(tokenId, updatedFields);
+      await db.updateTokenAccount(tokenId, { ...updatedFields, updatedAt: new Date().toISOString() });
       addToast('Token card updated successfully!', 'success');
       return true;
     } catch {
@@ -774,7 +833,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
 
       if (currentMonthTokensSold + tokensToAdd > limit) {
-        addToast(`Sale exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(2)} TK`, 'error');
+        addToast(`Sale exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(2)} tokens`, 'error');
         return false;
       }
     }
@@ -786,14 +845,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      // Update student's balance globally
+      // TODO (security/reliability): This balance update is NOT atomic.
+      // Two simultaneous recharges to the same account could cause a race condition
+      // where one update overwrites the other.
+      // Recommended fix: Use a Firestore Transaction (runTransaction) or a
+      // Cloud Function with FieldValue.increment() for safe concurrent updates.
+      // See SECURITY.md for the implementation path.
       const newBalance = Math.round((studentCard.tokens + tokensToAdd) * 100) / 100;
       await db.updateTokenAccount(studentId, {
-        tokens: newBalance
+        tokens: newBalance,
+        updatedAt: new Date().toISOString()
       });
 
-      // Create Token transaction log
+      // Create immutable token transaction log
       await db.addTokenTransaction({
+        type: 'recharge',
         studentId,
         studentName: studentCard.name,
         cardNo: studentCard.cardNo,
@@ -812,6 +878,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateStaffLimit = async (staffId: string, limit: number): Promise<boolean> => {
+    // SECURITY: Only the owner can change staff token limits.
+    if (currentUser?.role !== 'owner') {
+      addToast('Permission denied: only the owner can update staff limits.', 'error');
+      return false;
+    }
     try {
       await db.updateStaffAccount(staffId, { monthlyTokenLimit: limit });
       addToast('Staff monthly token limit updated successfully!', 'success');

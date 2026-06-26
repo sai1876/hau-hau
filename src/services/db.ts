@@ -130,7 +130,7 @@ const DEFAULT_STAFF: StaffAccount[] = [
     name: 'Alex Johnson',
     emailOrPhone: 'alex@hauhau.com',
     username: 'staff',
-    password: 'staff',
+    password: '1562206543da764123c21bd524674f0a8aaf49c8a89744c97352fe677f7e4006', // SHA-256 for 'staff'
     status: 'active',
     role: 'staff',
     monthlyTokenLimit: 1000
@@ -140,7 +140,7 @@ const DEFAULT_STAFF: StaffAccount[] = [
     name: 'Sarah (Owner)',
     emailOrPhone: 'owner@hauhau.com',
     username: 'owner',
-    password: 'owner123',
+    password: '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9', // SHA-256 for 'owner123'
     status: 'active',
     role: 'owner'
   }
@@ -162,7 +162,7 @@ export const db = {
         if (hasOldItem) {
           localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU));
         }
-      } catch (e) {
+      } catch {
         localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU));
       }
     } else {
