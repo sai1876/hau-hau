@@ -959,17 +959,17 @@ export default function OwnerDashboardPage() {
                   <span className="text-xs font-bold text-emerald-500 font-mono block mt-1">₹{(historyToken.tokens * 30).toFixed(2)}</span>
                 </div>
                 <div className="bg-zinc-900/20 border border-white/2 p-3 rounded-sm">
-                  <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider block">Total Orders Paid</span>
+                  <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider block">Total Recharges</span>
                   <span className="text-xs font-bold text-zinc-200 font-mono block mt-1">
-                    {orders.filter(o => o.paymentMode === 'tokens' && o.tokenCardNo === historyToken.cardNo).length}
+                    {tokenTransactions.filter(tx => tx.studentId === historyToken.id).length}
                   </span>
                 </div>
                 <div className="bg-zinc-900/20 border border-white/2 p-3 rounded-sm">
-                  <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider block">Total Spent Tokens</span>
+                  <span className="text-[8px] text-zinc-500 uppercase font-bold tracking-wider block">Total Tokens Taken</span>
                   <span className="text-xs font-bold text-orange-400 font-mono block mt-1">
-                    {orders
-                      .filter(o => o.paymentMode === 'tokens' && o.tokenCardNo === historyToken.cardNo && o.orderStatus !== 'cancelled')
-                      .reduce((sum, o) => sum + (o.tokensDeducted || 0), 0)
+                    {tokenTransactions
+                      .filter(tx => tx.studentId === historyToken.id)
+                      .reduce((sum, tx) => sum + tx.tokens, 0)
                       .toFixed(2)} tokens
                   </span>
                 </div>

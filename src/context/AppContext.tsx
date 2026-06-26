@@ -36,7 +36,7 @@ interface AppContextType {
   updateCartQuantity: (itemId: string, change: number) => void;
   removeFromCart: (itemId: string) => void;
   clearTableCart: (table: string) => void;
-  confirmOrder: (paymentMode: 'cash' | 'online' | 'tokens', tokenCardId?: string, tokensDeducted?: number) => boolean;
+  confirmOrder: (paymentMode: 'cash' | 'online' | 'tokens') => boolean;
   
   // Owner actions
   toggleMenuItem: (itemId: string) => void;
@@ -405,7 +405,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addToast(`Cart cleared for Table ${table}`, 'info');
   };
 
-  const confirmOrder = (paymentMode: 'cash' | 'online' | 'tokens', tokenCardId?: string, tokensDeducted?: number): boolean => {
+  const confirmOrder = (paymentMode: 'cash' | 'online' | 'tokens'): boolean => {
     if (!activeTable) {
       addToast('Table number is required.', 'error');
       return false;
@@ -427,29 +427,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let extraOrderFields = {};
 
     if (paymentMode === 'tokens') {
-      if (!tokenCardId || tokensDeducted === undefined) {
-        addToast('Please select a valid student token card.', 'error');
-        return false;
-      }
-
-      const tokenCard = tokens.find(t => t.id === tokenCardId);
-      if (!tokenCard) {
-        addToast('Selected token card not found in database.', 'error');
-        return false;
-      }
-
-      if (tokenCard.tokens < tokensDeducted) {
-        addToast(`Insufficient balance on card (Has: ${tokenCard.tokens} tokens, Requires: ${tokensDeducted} tokens).`, 'error');
-        return false;
-      }
-
-      // Deduct balance
-      const newBalance = Math.round((tokenCard.tokens - tokensDeducted) * 100) / 100;
-      db.updateTokenAccount(tokenCardId, { tokens: newBalance });
-
+      const tokensDeducted = Math.round((subtotal / 30) * 100) / 100;
       extraOrderFields = {
-        tokenCardNo: tokenCard.cardNo,
-        studentName: tokenCard.name,
         tokensDeducted: tokensDeducted
       };
     }
