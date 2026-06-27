@@ -11,12 +11,13 @@ interface TokenAccountFormProps {
 }
 
 export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFormProps) {
-  const { createNewToken, updateToken } = useApp();
+  const { createNewToken, updateToken, settings } = useApp();
+  const tokenValue = settings?.tokenValueInRupees || 30;
 
   const [name, setName] = useState(() => editingToken?.name ?? '');
   const [cardNo, setCardNo] = useState(() => editingToken?.cardNo ?? '');
   const [tokensInput, setTokensInput] = useState(() => editingToken ? editingToken.tokens.toString() : '');
-  const [rupeesInput, setRupeesInput] = useState(() => editingToken ? (editingToken.tokens * 30).toString() : '');
+  const [rupeesInput, setRupeesInput] = useState(() => editingToken ? (editingToken.tokens * tokenValue).toString() : '');
 
   // Track the last seen editingToken.id to detect when the edit target changes
   const [lastEditId, setLastEditId] = useState<string | null>(() => editingToken?.id ?? null);
@@ -27,14 +28,14 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
     setName(editingToken?.name ?? '');
     setCardNo(editingToken?.cardNo ?? '');
     setTokensInput(editingToken ? editingToken.tokens.toString() : '');
-    setRupeesInput(editingToken ? (editingToken.tokens * 30).toString() : '');
+    setRupeesInput(editingToken ? (editingToken.tokens * tokenValue).toString() : '');
   }
 
   const handleTokensChange = (val: string) => {
     setTokensInput(val);
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed >= 0) {
-      const rupees = Math.round(parsed * 30 * 100) / 100;
+      const rupees = Math.round(parsed * tokenValue * 100) / 100;
       setRupeesInput(rupees.toString());
     } else {
       setRupeesInput('');
@@ -45,7 +46,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
     setRupeesInput(val);
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed >= 0) {
-      const tokens = Math.round((parsed / 30) * 100) / 100;
+      const tokens = Math.round((parsed / tokenValue) * 100) / 100;
       setTokensInput(tokens.toString());
     } else {
       setTokensInput('');
@@ -56,10 +57,10 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
     e.preventDefault();
     if (!name || !cardNo || !tokensInput) return;
 
-    // Validate card number: must be 3 to 6 numeric digits
-    const cardNoPattern = /^\d{3,6}$/;
+    // Validate card number: must be 3 to 8 numeric digits
+    const cardNoPattern = /^\d{3,8}$/;
     if (!cardNoPattern.test(cardNo.trim())) {
-      alert('Card number must be 3 to 6 digits (e.g. 005, 10042, 123456).');
+      alert('Card number must be 3 to 8 digits (e.g. 005, 10042, 12345678).');
       return;
     }
 
@@ -179,19 +180,24 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
         {/* Card Number */}
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-text-muted font-bold">
-            Card Number (3–6 Digits)
+            Card Number (3–8 Digits)
           </label>
           <input
             type="text"
             required
-            maxLength={6}
-            placeholder="e.g. 001 or 10042"
+            maxLength={8}
+            placeholder="e.g. 100042 or 12345678"
             value={cardNo}
             onChange={(e) => setCardNo(e.target.value.replace(/\D/g, ''))} // only allow digits
             className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-text-muted/50 font-mono text-center tracking-widest font-semibold"
           />
-          <span className="text-[10px] text-text-muted font-medium">
-            Numeric only, 3–6 digits. Owner decides the card length for this outlet.
+          <span className="text-[10px] text-text-muted font-medium leading-relaxed">
+            Numeric only, 3–8 digits. 
+            {cardNo.length > 0 && cardNo.length < 6 && (
+              <span className="text-warning font-bold block mt-1">
+                ⚠ Card numbers under 6 digits are weak. 6–8 digits, QR ID, or RFID-style is recommended for production.
+              </span>
+            )}
           </span>
         </div>
 
@@ -243,7 +249,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
         </div>
 
         <span className="text-[10px] text-text-muted font-medium text-center">
-          1 Token = ₹30.00 exchange rate.
+          1 Token = ₹{tokenValue.toFixed(2)} exchange rate.
         </span>
 
         {/* Submit */}

@@ -1,15 +1,17 @@
 import { firestore } from './firebase';
-import { MenuItem, Order, StaffAccount, TokenAccount, TokenTransaction } from '../types';
+import { MenuItem, Order, StaffAccount, TokenAccount, TokenTransaction, AuditLog, Settings } from '../types';
 import { 
   collection, 
   doc, 
+  getDoc,
   getDocs, 
   setDoc, 
   updateDoc, 
   deleteDoc, 
   onSnapshot, 
   query, 
-  orderBy 
+  orderBy,
+  runTransaction
 } from 'firebase/firestore';
 
 const MENU_KEY = 'hau_hau_menu';
@@ -17,6 +19,8 @@ const STAFF_KEY = 'hau_hau_staff';
 const ORDERS_KEY = 'hau_hau_orders';
 const TOKENS_KEY = 'hau_hau_tokens';
 const TRANSACTIONS_KEY = 'hau_hau_transactions';
+const SETTINGS_KEY = 'hau_hau_settings';
+const AUDIT_LOGS_KEY = 'hau_hau_audit_logs';
 
 let firebaseBlocked = false;
 
@@ -124,6 +128,21 @@ const DEFAULT_MENU: MenuItem[] = [
   }
 ];
 
+const DEFAULT_OUTLET_ID = 'main_outlet';
+
+const DEFAULT_SETTINGS: Settings = {
+  id: 'settings_default',
+  outletId: DEFAULT_OUTLET_ID,
+  outletName: 'Hau-Hau Outlet 1',
+  tokenValueInRupees: 30,
+  manualUpiEnabled: true,
+  taxEnabled: false,
+  currency: 'INR',
+  receiptFooter: 'Thank you for dining with Hau-Hau!',
+  monthlyTokenLimitDefaults: 1000,
+  orderStatusFlow: ['pending', 'completed', 'cancelled']
+};
+
 const DEFAULT_STAFF: StaffAccount[] = [
   {
     id: 's1',
@@ -133,7 +152,8 @@ const DEFAULT_STAFF: StaffAccount[] = [
     password: '1562206543da764123c21bd524674f0a8aaf49c8a89744c97352fe677f7e4006', // SHA-256 for 'staff'
     status: 'active',
     role: 'staff',
-    monthlyTokenLimit: 1000
+    monthlyTokenLimit: 1000,
+    outletId: DEFAULT_OUTLET_ID
   },
   {
     id: 'owner_default',
@@ -142,13 +162,15 @@ const DEFAULT_STAFF: StaffAccount[] = [
     username: 'owner',
     password: '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9', // SHA-256 for 'owner123'
     status: 'active',
-    role: 'owner'
+    role: 'owner',
+    outletId: DEFAULT_OUTLET_ID
   }
 ];
 
 export const db = {
   isFirebaseConfigured,
   markFirebaseBlocked,
+  DEFAULT_OUTLET_ID,
   // Initialize Database (for LocalStorage mode)
   init(): void {
     if (typeof window === 'undefined') return;
@@ -180,6 +202,12 @@ export const db = {
     }
     if (!localStorage.getItem(TRANSACTIONS_KEY)) {
       localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([]));
+    }
+    if (!localStorage.getItem(SETTINGS_KEY)) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
+    }
+    if (!localStorage.getItem(AUDIT_LOGS_KEY)) {
+      localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify([]));
     }
   },
 
@@ -674,10 +702,10 @@ export const db = {
   },
 
   // --- Orders Write Operations ---
-  async createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 'orderStatus' | 'paymentStatus'>): Promise<Order> {
+  async createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 'orderStatus' | 'paymentStatus'> & { id?: string }): Promise<Order> {
     const newOrder: Order = {
       ...orderData,
-      id: 'HH-' + Math.floor(1000 + Math.random() * 9000),
+      id: orderData.id || 'HH-' + Math.floor(1000 + Math.random() * 9000),
       orderStatus: 'pending',
       paymentStatus: orderData.paymentMode === 'tokens' ? 'paid' : 'pending',
       createdAt: new Date().toISOString()
@@ -810,6 +838,562 @@ export const db = {
       const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
       const updated = list.filter(t => t.id !== tokenId);
       localStorage.setItem(TOKENS_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+    }
+  },
+
+  // --- Settings operations ---
+  subscribeLocalStorageSettings(callback: (settings: Settings) => void): () => void {
+    this.init();
+    const load = () => {
+      const settingsStr = localStorage.getItem(SETTINGS_KEY);
+      callback(settingsStr ? JSON.parse(settingsStr) : DEFAULT_SETTINGS);
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  },
+
+  subscribeSettings(callback: (settings: Settings) => void): () => void {
+    if (isFirebaseConfigured()) {
+      const docRef = doc(firestore, 'settings', 'settings_default');
+      let isUnsubscribed = false;
+      let localUnsub = () => {};
+      const firestoreUnsub = onSnapshot(docRef, (snapshot) => {
+        if (isUnsubscribed) return;
+        if (!snapshot.exists()) {
+          // Auto-seed default settings
+          setDoc(docRef, DEFAULT_SETTINGS).catch(() => {});
+          callback(DEFAULT_SETTINGS);
+        } else {
+          callback(snapshot.data() as Settings);
+        }
+      }, (error) => {
+        console.warn("Firestore settings subscription failed. Falling back to LocalStorage.", error);
+        this.markFirebaseBlocked();
+        if (!isUnsubscribed) {
+          localUnsub = this.subscribeLocalStorageSettings(callback);
+        }
+      });
+      return () => {
+        isUnsubscribed = true;
+        firestoreUnsub();
+        localUnsub();
+      };
+    } else {
+      return this.subscribeLocalStorageSettings(callback);
+    }
+  },
+
+  async updateSettings(updatedFields: Partial<Settings>): Promise<void> {
+    let useLocal = !isFirebaseConfigured();
+    if (isFirebaseConfigured()) {
+      try {
+        await updateDoc(doc(firestore, 'settings', 'settings_default'), {
+          ...updatedFields,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error("Firestore updateSettings failed:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+    if (useLocal) {
+      const current = localStorage.getItem(SETTINGS_KEY);
+      const parsed = current ? JSON.parse(current) : DEFAULT_SETTINGS;
+      const updated = { ...parsed, ...updatedFields, updatedAt: new Date().toISOString() };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+    }
+  },
+
+  // --- Audit Logs operations ---
+  subscribeLocalStorageAuditLogs(callback: (logs: AuditLog[]) => void): () => void {
+    this.init();
+    const load = () => {
+      const logsStr = localStorage.getItem(AUDIT_LOGS_KEY);
+      callback(logsStr ? JSON.parse(logsStr) : []);
+    };
+    load();
+    window.addEventListener('storage', load);
+    return () => window.removeEventListener('storage', load);
+  },
+
+  subscribeAuditLogs(callback: (logs: AuditLog[]) => void): () => void {
+    if (isFirebaseConfigured()) {
+      const logsCol = collection(firestore, 'audit_logs');
+      const q = query(logsCol, orderBy('timestamp', 'desc'));
+      let isUnsubscribed = false;
+      let localUnsub = () => {};
+      const firestoreUnsub = onSnapshot(q, (snapshot) => {
+        if (isUnsubscribed) return;
+        const logs: AuditLog[] = [];
+        snapshot.forEach((doc) => {
+          logs.push(doc.data() as AuditLog);
+        });
+        callback(logs);
+      }, (error) => {
+        console.warn("Firestore audit logs subscription failed. Falling back to LocalStorage.", error);
+        this.markFirebaseBlocked();
+        if (!isUnsubscribed) {
+          localUnsub = this.subscribeLocalStorageAuditLogs(callback);
+        }
+      });
+      return () => {
+        isUnsubscribed = true;
+        firestoreUnsub();
+        localUnsub();
+      };
+    } else {
+      return this.subscribeLocalStorageAuditLogs(callback);
+    }
+  },
+
+  async addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<AuditLog> {
+    const newLog: AuditLog = {
+      ...log,
+      id: 'log_' + Math.random().toString(36).substr(2, 9),
+      timestamp: new Date().toISOString(),
+      outletId: log.outletId || DEFAULT_OUTLET_ID
+    };
+    let useLocal = !isFirebaseConfigured();
+    if (isFirebaseConfigured()) {
+      try {
+        await setDoc(doc(firestore, 'audit_logs', newLog.id), newLog);
+      } catch (error) {
+        console.error("Firestore addAuditLog failed:", error);
+        this.markFirebaseBlocked();
+        useLocal = true;
+      }
+    }
+    if (useLocal) {
+      const logsStr = localStorage.getItem(AUDIT_LOGS_KEY);
+      const list = logsStr ? JSON.parse(logsStr) : [];
+      list.unshift(newLog);
+      localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(list));
+      window.dispatchEvent(new Event('storage'));
+    }
+    return newLog;
+  },
+
+  // --- Atomic Firestore Transactions for Token Ledgers ---
+  async rechargeTokensTransaction(
+    studentId: string,
+    tokensToAdd: number,
+    amountPaid: number,
+    soldBy: string,
+    actorUid: string,
+    actorRole: 'staff' | 'owner'
+  ): Promise<void> {
+    if (isFirebaseConfigured()) {
+      const tokenRef = doc(firestore, 'tokens', studentId);
+      const txRef = doc(collection(firestore, 'token_transactions'));
+      const auditRef = doc(collection(firestore, 'audit_logs'));
+      
+      await runTransaction(firestore, async (transaction) => {
+        const tokenDoc = await transaction.get(tokenRef);
+        if (!tokenDoc.exists()) throw new Error('Token card not found.');
+        const currentCard = tokenDoc.data() as TokenAccount;
+        
+        const newBalance = Math.round((currentCard.tokens + tokensToAdd) * 100) / 100;
+        if (newBalance < 0) throw new Error('Balance cannot be negative.');
+        
+        transaction.update(tokenRef, {
+          tokens: newBalance,
+          updatedAt: new Date().toISOString()
+        });
+        
+        const txRecord: TokenTransaction = {
+          id: txRef.id,
+          type: 'recharge',
+          studentId,
+          studentName: currentCard.name,
+          cardNo: currentCard.cardNo,
+          tokens: tokensToAdd,
+          amount: amountPaid,
+          soldBy,
+          createdAt: new Date().toISOString(),
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+        };
+        transaction.set(txRef, txRecord);
+        
+        const auditLog: AuditLog = {
+          id: auditRef.id,
+          action: 'tokenRecharged',
+          actorUid,
+          actorRole,
+          targetId: studentId,
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+          timestamp: new Date().toISOString(),
+          before: { tokens: currentCard.tokens },
+          after: { tokens: newBalance }
+        };
+        transaction.set(auditRef, auditLog);
+      });
+    } else {
+      const tokens = localStorage.getItem(TOKENS_KEY);
+      const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
+      const cardIndex = list.findIndex(t => t.id === studentId);
+      if (cardIndex === -1) throw new Error('Student card not found.');
+      
+      const currentCard = list[cardIndex];
+      const newBalance = Math.round((currentCard.tokens + tokensToAdd) * 100) / 100;
+      if (newBalance < 0) throw new Error('Balance cannot be negative.');
+      
+      const oldBalance = currentCard.tokens;
+      list[cardIndex] = {
+        ...currentCard,
+        tokens: newBalance,
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
+      
+      const txRecord: TokenTransaction = {
+        id: 'tx_' + Math.random().toString(36).substr(2, 9),
+        type: 'recharge',
+        studentId,
+        studentName: currentCard.name,
+        cardNo: currentCard.cardNo,
+        tokens: tokensToAdd,
+        amount: amountPaid,
+        soldBy,
+        createdAt: new Date().toISOString(),
+        outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+      };
+      const txs = localStorage.getItem(TRANSACTIONS_KEY);
+      const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];
+      txsList.unshift(txRecord);
+      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(txsList));
+      
+      await this.addAuditLog({
+        action: 'tokenRecharged',
+        actorUid,
+        actorRole,
+        targetId: studentId,
+        before: { tokens: oldBalance },
+        after: { tokens: newBalance }
+      });
+      
+      window.dispatchEvent(new Event('storage'));
+    }
+  },
+
+  async deductTokensTransaction(
+    studentId: string,
+    tokensToDeduct: number,
+    orderId: string,
+    soldBy: string,
+    actorUid: string,
+    actorRole: 'staff' | 'owner'
+  ): Promise<void> {
+    if (isFirebaseConfigured()) {
+      const tokenRef = doc(firestore, 'tokens', studentId);
+      const txRef = doc(collection(firestore, 'token_transactions'));
+      const auditRef = doc(collection(firestore, 'audit_logs'));
+      const settingsRef = doc(firestore, 'settings', 'settings_default');
+      
+      await runTransaction(firestore, async (transaction) => {
+        const tokenDoc = await transaction.get(tokenRef);
+        if (!tokenDoc.exists()) throw new Error('Token card not found.');
+        const currentCard = tokenDoc.data() as TokenAccount;
+        
+        const settingsDoc = await transaction.get(settingsRef);
+        const rate = settingsDoc.exists() ? (settingsDoc.data()?.tokenValueInRupees || 30) : 30;
+        
+        const newBalance = Math.round((currentCard.tokens - tokensToDeduct) * 100) / 100;
+        if (newBalance < 0) {
+          throw new Error(`Insufficient tokens! Balance is ${currentCard.tokens}, required is ${tokensToDeduct}.`);
+        }
+        
+        transaction.update(tokenRef, {
+          tokens: newBalance,
+          updatedAt: new Date().toISOString()
+        });
+        
+        const txRecord: TokenTransaction = {
+          id: txRef.id,
+          type: 'deduction',
+          studentId,
+          studentName: currentCard.name,
+          cardNo: currentCard.cardNo,
+          tokens: -tokensToDeduct,
+          amount: -(tokensToDeduct * rate),
+          soldBy,
+          orderId,
+          createdAt: new Date().toISOString(),
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+        };
+        transaction.set(txRef, txRecord);
+        
+        const auditLog: AuditLog = {
+          id: auditRef.id,
+          action: 'tokenDeducted',
+          actorUid,
+          actorRole,
+          targetId: studentId,
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+          timestamp: new Date().toISOString(),
+          before: { tokens: currentCard.tokens, orderId },
+          after: { tokens: newBalance, orderId }
+        };
+        transaction.set(auditRef, auditLog);
+      });
+    } else {
+      const tokens = localStorage.getItem(TOKENS_KEY);
+      const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
+      const cardIndex = list.findIndex(t => t.id === studentId);
+      if (cardIndex === -1) throw new Error('Student card not found.');
+      
+      const currentCard = list[cardIndex];
+      const newBalance = Math.round((currentCard.tokens - tokensToDeduct) * 100) / 100;
+      if (newBalance < 0) {
+        throw new Error(`Insufficient tokens! Balance is ${currentCard.tokens}, required is ${tokensToDeduct}.`);
+      }
+      
+      const oldBalance = currentCard.tokens;
+      list[cardIndex] = {
+        ...currentCard,
+        tokens: newBalance,
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
+      
+      const settingsRaw = localStorage.getItem('hau_hau_settings');
+      const rate = settingsRaw ? (JSON.parse(settingsRaw).tokenValueInRupees || 30) : 30;
+      
+      const txRecord: TokenTransaction = {
+        id: 'tx_' + Math.random().toString(36).substr(2, 9),
+        type: 'deduction',
+        studentId,
+        studentName: currentCard.name,
+        cardNo: currentCard.cardNo,
+        tokens: -tokensToDeduct,
+        amount: -(tokensToDeduct * rate),
+        soldBy,
+        orderId,
+        createdAt: new Date().toISOString(),
+        outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+      };
+      const txs = localStorage.getItem(TRANSACTIONS_KEY);
+      const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];
+      txsList.unshift(txRecord);
+      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(txsList));
+      
+      await this.addAuditLog({
+        action: 'tokenDeducted',
+        actorUid,
+        actorRole,
+        targetId: studentId,
+        before: { tokens: oldBalance, orderId },
+        after: { tokens: newBalance, orderId }
+      });
+      
+      window.dispatchEvent(new Event('storage'));
+    }
+  },
+
+  async refundTokensTransaction(
+    studentId: string,
+    tokensToRefund: number,
+    orderId: string,
+    actorUid: string,
+    actorRole: 'staff' | 'owner'
+  ): Promise<void> {
+    if (isFirebaseConfigured()) {
+      const tokenRef = doc(firestore, 'tokens', studentId);
+      const txRef = doc(collection(firestore, 'token_transactions'));
+      const auditRef = doc(collection(firestore, 'audit_logs'));
+      
+      await runTransaction(firestore, async (transaction) => {
+        const tokenDoc = await transaction.get(tokenRef);
+        if (!tokenDoc.exists()) throw new Error('Token card not found.');
+        const currentCard = tokenDoc.data() as TokenAccount;
+        
+        const newBalance = Math.round((currentCard.tokens + tokensToRefund) * 100) / 100;
+        
+        transaction.update(tokenRef, {
+          tokens: newBalance,
+          updatedAt: new Date().toISOString()
+        });
+        
+        const txRecord: TokenTransaction = {
+          id: txRef.id,
+          type: 'refund',
+          studentId,
+          studentName: currentCard.name,
+          cardNo: currentCard.cardNo,
+          tokens: tokensToRefund,
+          amount: tokensToRefund * 30,
+          soldBy: actorRole === 'owner' ? 'owner' : 'staff',
+          orderId,
+          createdAt: new Date().toISOString(),
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+        };
+        transaction.set(txRef, txRecord);
+        
+        const auditLog: AuditLog = {
+          id: auditRef.id,
+          action: 'tokenRefunded',
+          actorUid,
+          actorRole,
+          targetId: studentId,
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+          timestamp: new Date().toISOString(),
+          before: { tokens: currentCard.tokens, orderId },
+          after: { tokens: newBalance, orderId }
+        };
+        transaction.set(auditRef, auditLog);
+      });
+    } else {
+      const tokens = localStorage.getItem(TOKENS_KEY);
+      const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
+      const cardIndex = list.findIndex(t => t.id === studentId);
+      if (cardIndex === -1) throw new Error('Student card not found.');
+      
+      const currentCard = list[cardIndex];
+      const newBalance = Math.round((currentCard.tokens + tokensToRefund) * 100) / 100;
+      
+      const oldBalance = currentCard.tokens;
+      list[cardIndex] = {
+        ...currentCard,
+        tokens: newBalance,
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
+      
+      const txRecord: TokenTransaction = {
+        id: 'tx_' + Math.random().toString(36).substr(2, 9),
+        type: 'refund',
+        studentId,
+        studentName: currentCard.name,
+        cardNo: currentCard.cardNo,
+        tokens: tokensToRefund,
+        amount: tokensToRefund * 30,
+        soldBy: actorRole === 'owner' ? 'owner' : 'staff',
+        orderId,
+        createdAt: new Date().toISOString(),
+        outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+      };
+      const txs = localStorage.getItem(TRANSACTIONS_KEY);
+      const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];
+      txsList.unshift(txRecord);
+      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(txsList));
+      
+      await this.addAuditLog({
+        action: 'tokenRefunded',
+        actorUid,
+        actorRole,
+        targetId: studentId,
+        before: { tokens: oldBalance, orderId },
+        after: { tokens: newBalance, orderId }
+      });
+      
+      window.dispatchEvent(new Event('storage'));
+    }
+  },
+
+  async adjustTokensTransaction(
+    studentId: string,
+    targetTokens: number,
+    reason: string,
+    actorUid: string,
+    actorRole: 'staff' | 'owner'
+  ): Promise<void> {
+    if (isFirebaseConfigured()) {
+      const tokenRef = doc(firestore, 'tokens', studentId);
+      const txRef = doc(collection(firestore, 'token_transactions'));
+      const auditRef = doc(collection(firestore, 'audit_logs'));
+      const settingsRef = doc(firestore, 'settings', 'settings_default');
+      
+      await runTransaction(firestore, async (transaction) => {
+        const tokenDoc = await transaction.get(tokenRef);
+        if (!tokenDoc.exists()) throw new Error('Token card not found.');
+        const currentCard = tokenDoc.data() as TokenAccount;
+        
+        const settingsDoc = await transaction.get(settingsRef);
+        const rate = settingsDoc.exists() ? (settingsDoc.data()?.tokenValueInRupees || 30) : 30;
+        
+        const delta = Math.round((targetTokens - currentCard.tokens) * 100) / 100;
+        
+        transaction.update(tokenRef, {
+          tokens: targetTokens,
+          updatedAt: new Date().toISOString()
+        });
+        
+        const txRecord: TokenTransaction = {
+          id: txRef.id,
+          type: 'adjustment',
+          studentId,
+          studentName: currentCard.name,
+          cardNo: currentCard.cardNo,
+          tokens: delta,
+          amount: delta * rate,
+          soldBy: 'owner',
+          createdAt: new Date().toISOString(),
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+        };
+        transaction.set(txRef, txRecord);
+        
+        const auditLog: AuditLog = {
+          id: auditRef.id,
+          action: 'tokenAdjusted',
+          actorUid,
+          actorRole,
+          targetId: studentId,
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+          timestamp: new Date().toISOString(),
+          before: { tokens: currentCard.tokens, reason },
+          after: { tokens: targetTokens, reason }
+        };
+        transaction.set(auditRef, auditLog);
+      });
+    } else {
+      const tokens = localStorage.getItem(TOKENS_KEY);
+      const list: TokenAccount[] = tokens ? JSON.parse(tokens) : [];
+      const cardIndex = list.findIndex(t => t.id === studentId);
+      if (cardIndex === -1) throw new Error('Student card not found.');
+      
+      const currentCard = list[cardIndex];
+      const delta = Math.round((targetTokens - currentCard.tokens) * 100) / 100;
+      const oldBalance = currentCard.tokens;
+      
+      list[cardIndex] = {
+        ...currentCard,
+        tokens: targetTokens,
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
+      
+      const settingsRaw = localStorage.getItem('hau_hau_settings');
+      const rate = settingsRaw ? (JSON.parse(settingsRaw).tokenValueInRupees || 30) : 30;
+      
+      const txRecord: TokenTransaction = {
+        id: 'tx_' + Math.random().toString(36).substr(2, 9),
+        type: 'adjustment',
+        studentId,
+        studentName: currentCard.name,
+        cardNo: currentCard.cardNo,
+        tokens: delta,
+        amount: delta * rate,
+        soldBy: 'owner',
+        createdAt: new Date().toISOString(),
+        outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+      };
+      const txs = localStorage.getItem(TRANSACTIONS_KEY);
+      const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];
+      txsList.unshift(txRecord);
+      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(txsList));
+      
+      await this.addAuditLog({
+        action: 'tokenAdjusted',
+        actorUid,
+        actorRole,
+        targetId: studentId,
+        before: { tokens: oldBalance, reason },
+        after: { tokens: targetTokens, reason }
+      });
+      
       window.dispatchEvent(new Event('storage'));
     }
   }

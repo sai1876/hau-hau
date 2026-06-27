@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useRouter } from 'next/navigation';
 import StatCard from '@/components/StatCard';
@@ -27,6 +27,8 @@ import {
   Leaf,
   Star,
   X,
+  ShieldCheckered,
+  Gear,
 } from '@phosphor-icons/react';
 
 export default function OwnerDashboardPage() {
@@ -44,11 +46,14 @@ export default function OwnerDashboardPage() {
     confirmAction,
     tokenTransactions,
     staffList,
-    updateStaffLimit
+    updateStaffLimit,
+    settings,
+    auditLogs,
+    updateSettings
   } = useApp();
 
   // Navigation Tabs for Command Center
-  const [activeWorkspace, setActiveWorkspace] = useState<'overview' | 'orders' | 'menu' | 'staff' | 'tokens' | 'profile'>('overview');
+  const [activeWorkspace, setActiveWorkspace] = useState<'overview' | 'orders' | 'menu' | 'staff' | 'tokens' | 'audit' | 'settings' | 'profile'>('overview');
   const [paymentModeFilter, setPaymentModeFilter] = useState<'all' | 'cash' | 'online' | 'tokens'>('all');
   const [isAddingMenuItem, setIsAddingMenuItem] = useState(false);
   const [activeOrderTab, setActiveOrderTab] = useState<'pending' | 'completed' | 'all'>('pending');
@@ -57,6 +62,69 @@ export default function OwnerDashboardPage() {
   const [historyToken, setHistoryToken] = useState<TokenAccount | null>(null);
   const [selectedStaffDetail, setSelectedStaffDetail] = useState<StaffAccount | null>(null);
   const [editingLimitValue, setEditingLimitValue] = useState<string>('');
+
+  // Settings form states
+  const [outletName, setOutletName] = useState('');
+  const [tokenValueInRupees, setTokenValueInRupees] = useState('');
+  const [manualUpiEnabled, setManualUpiEnabled] = useState(true);
+  const [taxEnabled, setTaxEnabled] = useState(false);
+  const [currency, setCurrency] = useState('INR');
+  const [receiptFooter, setReceiptFooter] = useState('');
+  const [monthlyTokenLimitDefaults, setMonthlyTokenLimitDefaults] = useState('');
+
+  // Audit search & filter state
+  const [auditQuery, setAuditQuery] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
+
+  // Sync settings values
+  useEffect(() => {
+    if (settings) {
+      setOutletName(settings.outletName ?? '');
+      setTokenValueInRupees(String(settings.tokenValueInRupees ?? 30));
+      setManualUpiEnabled(settings.manualUpiEnabled ?? true);
+      setTaxEnabled(settings.taxEnabled ?? false);
+      setCurrency(settings.currency ?? 'INR');
+      setReceiptFooter(settings.receiptFooter ?? '');
+      setMonthlyTokenLimitDefaults(String(settings.monthlyTokenLimitDefaults ?? 1000));
+    }
+  }, [settings]);
+
+  // Date filtering state for day-wise reporting
+  const [dateFilterType, setDateFilterType] = useState<'today' | 'yesterday' | 'last7days' | 'custom' | 'all'>('today');
+  const [customDate, setCustomDate] = useState<string>(() => new Date().toLocaleDateString('en-CA'));
+
+  // Memoized date filtered orders list
+  const filteredByDateOrders = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA');
+    
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString('en-CA');
+
+    return orders.filter(order => {
+      if (!order.createdAt) return false;
+      const orderDate = new Date(order.createdAt);
+      const orderDateStr = orderDate.toLocaleDateString('en-CA');
+      
+      switch (dateFilterType) {
+        case 'today':
+          return orderDateStr === todayStr;
+        case 'yesterday':
+          return orderDateStr === yesterdayStr;
+        case 'last7days': {
+          const diffTime = Math.abs(now.getTime() - orderDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          return diffDays <= 7;
+        }
+        case 'custom':
+          return orderDateStr === customDate;
+        case 'all':
+        default:
+          return true;
+      }
+    });
+  }, [orders, dateFilterType, customDate]);
 
   // Pagination state
   const ORDERS_PER_PAGE = 10;
@@ -104,19 +172,19 @@ export default function OwnerDashboardPage() {
   }
 
   // Calculations for Metrics
-  const totalOrders = orders.length;
-  const pendingOrders = orders.filter(o => o.orderStatus === 'pending').length;
-  const completedOrders = orders.filter(o => o.orderStatus === 'completed').length;
+  const totalOrders = filteredByDateOrders.length;
+  const pendingOrders = filteredByDateOrders.filter(o => o.orderStatus === 'pending').length;
+  const completedOrders = filteredByDateOrders.filter(o => o.orderStatus === 'completed').length;
 
-  const cashCollection = orders
+  const cashCollection = filteredByDateOrders
     .filter(o => o.paymentMode === 'cash' && o.orderStatus !== 'cancelled')
     .reduce((sum, o) => sum + o.total, 0);
 
-  const onlineCollection = orders
+  const onlineCollection = filteredByDateOrders
     .filter(o => o.paymentMode === 'online' && o.orderStatus !== 'cancelled')
     .reduce((sum, o) => sum + o.total, 0);
 
-  const tokenCollection = orders
+  const tokenCollection = filteredByDateOrders
     .filter(o => o.paymentMode === 'tokens' && o.orderStatus !== 'cancelled')
     .reduce((sum, o) => sum + o.total, 0);
 
@@ -124,7 +192,7 @@ export default function OwnerDashboardPage() {
 
   // Filter orders by active sub-tab AND active payment mode filter
   // Sort newest-first then apply status/payment filters
-  const sortedOrders = [...orders].sort(
+  const sortedOrders = [...filteredByDateOrders].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
   const filteredOrders = sortedOrders.filter((order) => {
@@ -138,7 +206,7 @@ export default function OwnerDashboardPage() {
 
   // Top Selling Items calculations
   const itemSalesMap: Record<string, { name: string; quantity: number; total: number }> = {};
-  orders.forEach(order => {
+  filteredByDateOrders.forEach(order => {
     if (order.orderStatus === 'completed') {
       order.items.forEach(item => {
         if (!itemSalesMap[item.menuItemId]) {
@@ -152,6 +220,17 @@ export default function OwnerDashboardPage() {
   const topSellingItems = Object.values(itemSalesMap)
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 5);
+
+  const getFilterLabel = () => {
+    switch (dateFilterType) {
+      case 'today': return "Today's";
+      case 'yesterday': return "Yesterday's";
+      case 'last7days': return "Last 7 Days";
+      case 'custom': return customDate;
+      case 'all': return "All-Time";
+      default: return "Today's";
+    }
+  };
 
   // Active staff list — limit to 5 for overview
   const activeStaffList    = staffList.filter(s => s.status === 'active');
@@ -447,7 +526,7 @@ export default function OwnerDashboardPage() {
 
       {/* Mobile Nav Menu */}
       <nav className="md:hidden flex overflow-x-auto border-b border-border bg-surface-header/40 p-2 shrink-0 gap-1.5">
-        {(['overview', 'orders', 'menu', 'staff', 'tokens', 'profile'] as const).map((space) => {
+        {(['overview', 'orders', 'menu', 'staff', 'tokens', 'audit', 'settings', 'profile'] as const).map((space) => {
           const isSelected = activeWorkspace === space;
           const mobileIcons: Record<string, React.ReactNode> = {
             overview: <SquaresFour  size={15} weight="duotone" />,
@@ -455,6 +534,8 @@ export default function OwnerDashboardPage() {
             menu:     <ForkKnife    size={15} weight="duotone" />,
             staff:    <Users        size={15} weight="duotone" />,
             tokens:   <CreditCard   size={15} weight="duotone" />,
+            audit:    <ShieldCheckered size={15} weight="duotone" />,
+            settings: <Gear          size={15} weight="duotone" />,
             profile:  <UserCircle   size={15} weight="duotone" />,
           };
           const mobileLabels: Record<string, string> = {
@@ -463,6 +544,8 @@ export default function OwnerDashboardPage() {
             menu: 'Menu',
             staff: 'Staff',
             tokens: 'Tokens',
+            audit: 'Audits',
+            settings: 'Settings',
             profile: 'Profile'
           };
           return (
@@ -499,7 +582,7 @@ export default function OwnerDashboardPage() {
             <hr className="border-border" />
             
             <nav className="flex flex-col gap-1.5">
-              {(['overview', 'orders', 'menu', 'staff', 'tokens', 'profile'] as const).map((space) => {
+              {(['overview', 'orders', 'menu', 'staff', 'tokens', 'audit', 'settings', 'profile'] as const).map((space) => {
                 const isSelected = activeWorkspace === space;
                 const sidebarLabels: Record<string, { icon: React.ReactNode; text: string }> = {
                   overview: { icon: <SquaresFour  size={17} weight="duotone" />, text: 'Overview' },
@@ -507,7 +590,9 @@ export default function OwnerDashboardPage() {
                   menu:     { icon: <ForkKnife    size={17} weight="duotone" />, text: 'Menu' },
                   staff:    { icon: <Users        size={17} weight="duotone" />, text: 'Staff' },
                   tokens:   { icon: <CreditCard   size={17} weight="duotone" />, text: 'Token Cards' },
-                  profile:  { icon: <UserCircle   size={17} weight="duotone" />, text: 'Profile & Settings' },
+                  audit:    { icon: <ShieldCheckered size={17} weight="duotone" />, text: 'Audit Logs' },
+                  settings: { icon: <Gear          size={17} weight="duotone" />, text: 'Outlet Settings' },
+                  profile:  { icon: <UserCircle   size={17} weight="duotone" />, text: 'Profile' },
                 };
                 return (
                   <button
@@ -554,7 +639,7 @@ export default function OwnerDashboardPage() {
       </div>
 
       {/* Main content scroll container */}
-      <main className="flex-1 p-4 md:p-6 lg:p-8 flex flex-col gap-6 overflow-y-auto h-screen min-w-0">
+      <main className="flex-1 px-4 pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-8 pb-24 md:pb-32 flex flex-col gap-6 overflow-y-auto h-screen min-w-0">
         
         {/* Workspace Title Header */}
         <header className="flex justify-between items-center border-b border-border pb-4 shrink-0">
@@ -568,6 +653,54 @@ export default function OwnerDashboardPage() {
             {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </div>
         </header>
+
+        {(activeWorkspace === 'overview' || activeWorkspace === 'orders') && (
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface border border-border p-4.5 rounded-xl shrink-0 shadow-xs">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-bold text-foreground">Operating Period</span>
+              <span className="text-[10px] text-text-muted">Recalculate analytics, revenue pools, and transactions</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {(['today', 'yesterday', 'last7days', 'all', 'custom'] as const).map((type) => {
+                const labelMap = {
+                  today: 'Today',
+                  yesterday: 'Yesterday',
+                  last7days: 'Last 7 Days',
+                  all: 'All Time',
+                  custom: 'Custom Date'
+                };
+                const isSelected = dateFilterType === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => {
+                      setDateFilterType(type);
+                      setOrdersPage(1);
+                    }}
+                    className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary border-primary text-white scale-95 shadow-sm'
+                        : 'bg-surface-header border-border text-text-muted hover:text-foreground hover:bg-surface-container/20'
+                    }`}
+                  >
+                    {labelMap[type]}
+                  </button>
+                );
+              })}
+              {dateFilterType === 'custom' && (
+                <input
+                  type="date"
+                  value={customDate}
+                  onChange={(e) => {
+                    setCustomDate(e.target.value);
+                    setOrdersPage(1);
+                  }}
+                  className="bg-surface-header border border-border px-3 py-1.5 text-xs font-mono font-bold rounded-lg text-foreground focus:outline-none focus:border-primary w-40"
+                />
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Workspace content sections */}
         <div className="flex-1 flex flex-col gap-6 animate-slide-in min-h-0">
@@ -600,14 +733,14 @@ export default function OwnerDashboardPage() {
                 <div className="minimal-card p-6 rounded-xl bg-surface border border-border flex flex-col justify-between relative overflow-hidden">
                   <div className="absolute -right-20 -top-20 w-44 h-44 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
                   <div>
-                    <span className="text-[10px] text-text-muted font-bold block uppercase tracking-wider">Today&apos;s Revenue</span>
+                    <span className="text-[10px] text-text-muted font-bold block uppercase tracking-wider">{getFilterLabel()} Revenue</span>
                     <span className="text-4xl font-extrabold text-foreground font-mono mt-3 block leading-tight">
                       ₹{totalCollections.toFixed(2)}
                     </span>
-                    <p className="text-xs text-text-muted mt-2 leading-relaxed">Combine of cash, online, and token card transactions logged today.</p>
+                    <p className="text-xs text-text-muted mt-2 leading-relaxed">Combined cash, online, and token card transactions logged for this period.</p>
                   </div>
                   <div className="border-t border-border pt-4 mt-6 flex justify-between items-center text-xs">
-                    <span className="text-text-muted font-semibold">Today&apos;s Total Orders</span>
+                    <span className="text-text-muted font-semibold">{getFilterLabel()} Total Orders</span>
                     <span className="font-bold text-foreground font-mono">{totalOrders} orders</span>
                   </div>
                 </div>
@@ -618,7 +751,7 @@ export default function OwnerDashboardPage() {
                 {/* Top selling items */}
                 <div className="minimal-card p-5 rounded-xl bg-surface border border-border flex flex-col gap-4">
                   <h3 className="text-xs text-foreground font-bold uppercase tracking-wider flex items-center gap-2">
-                    <ForkKnife size={14} weight="duotone" className="text-primary" /> Top Selling Items (Today)
+                    <ForkKnife size={14} weight="duotone" className="text-primary" /> Top Selling Items ({getFilterLabel()})
                   </h3>
                   <div className="flex flex-col gap-2">
                     {topSellingItems.length === 0 ? (
@@ -650,7 +783,7 @@ export default function OwnerDashboardPage() {
                       <p className="text-xs text-text-muted font-semibold text-center py-4">No active staff right now</p>
                     ) : (
                       activeStaffPreview.map((staff) => {
-                        const staffOrdersCount = orders.filter(o => o.staffId === staff.username).length;
+                        const staffOrdersCount = filteredByDateOrders.filter(o => o.staffId === staff.username).length;
                         return (
                           <div key={staff.id} className="flex items-center justify-between p-3 bg-surface-container/20 border border-border rounded-lg text-xs">
                             <div className="flex items-center gap-2.5">
@@ -664,7 +797,7 @@ export default function OwnerDashboardPage() {
                             </div>
                             <div className="flex items-center gap-3.5">
                               <span className="bg-success/10 text-success border border-success/20 px-2 py-0.5 rounded text-[10px] font-bold">Active</span>
-                              <span className="font-mono text-text-muted font-bold">{staffOrdersCount} orders today</span>
+                              <span className="font-mono text-text-muted font-bold">{staffOrdersCount} orders</span>
                             </div>
                           </div>
                         );
@@ -754,58 +887,85 @@ export default function OwnerDashboardPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border bg-surface-container/10">
-                          {pagedOrders.map((order) => (
-                            <tr 
-                              key={order.id} 
-                              onClick={() => setSelectedOrder(order)}
-                              className="hover:bg-surface-container/20 transition-colors cursor-pointer"
-                            >
-                              <td className="p-3.5 pl-5 font-bold text-foreground font-mono">#{order.id.replace('HH-', '')}</td>
-                              <td className="p-3.5 font-bold text-primary font-mono">{order.tableNumber}</td>
-                              <td className="p-3.5 text-text-muted">
-                                {order.items.reduce((sum, i) => sum + i.quantity, 0)} units
-                              </td>
-                              <td className="p-3.5 font-bold text-foreground font-mono">₹{order.total.toFixed(2)}</td>
-                              <td className="p-3.5">
-                                <StatusBadge status={order.orderStatus} />
-                              </td>
-                              <td className="p-3.5 pr-5 text-right flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  onClick={() => setSelectedOrder(order)}
-                                  className="minimal-btn-secondary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                >
-                                  Details
-                                </button>
-                                
-                                {order.orderStatus === 'pending' && (
-                                  <>
-                                    <button
-                                      onClick={() => handleStatusChange(order.id, 'completed')}
-                                      className="bg-success hover:bg-[#235e26] text-white px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                    >
-                                      Complete
-                                    </button>
-                                    <button
-                                      onClick={() => handleCancelOrder(order.id)}
-                                      className="border border-error/20 hover:bg-error/5 text-error px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </>
-                                )}
-
-                                {order.orderStatus === 'completed' && (
-                                  <button
-                                    onClick={() => handleStatusChange(order.id, 'pending')}
-                                    className="border border-primary/20 hover:bg-primary/5 text-primary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                    title="Revert to Pending"
+                          {(() => {
+                            let lastDateHeader = '';
+                            return pagedOrders.map((order) => {
+                              const orderDate = new Date(order.createdAt);
+                              const dateHeaderStr = orderDate.toLocaleDateString(undefined, { 
+                                weekday: 'long', 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                              });
+                              const showHeader = dateHeaderStr !== lastDateHeader;
+                              if (showHeader) {
+                                lastDateHeader = dateHeaderStr;
+                              }
+                              return (
+                                <React.Fragment key={order.id}>
+                                  {showHeader && (
+                                    <tr className="bg-surface-header/60 border-y border-border select-none pointer-events-none">
+                                      <td colSpan={6} className="p-3 pl-5 font-bold text-foreground text-[11px] tracking-wide">
+                                        <span className="flex items-center gap-2">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                          {dateHeaderStr}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  )}
+                                  <tr 
+                                    onClick={() => setSelectedOrder(order)}
+                                    className="hover:bg-surface-container/20 transition-colors cursor-pointer"
                                   >
-                                    Revert
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
+                                    <td className="p-3.5 pl-5 font-bold text-foreground font-mono">#{order.id.replace('HH-', '')}</td>
+                                    <td className="p-3.5 font-bold text-primary font-mono">{order.tableNumber}</td>
+                                    <td className="p-3.5 text-text-muted">
+                                      {order.items.reduce((sum, i) => sum + i.quantity, 0)} units
+                                    </td>
+                                    <td className="p-3.5 font-bold text-foreground font-mono">₹{order.total.toFixed(2)}</td>
+                                    <td className="p-3.5">
+                                      <StatusBadge status={order.orderStatus} />
+                                    </td>
+                                    <td className="p-3.5 pr-5 text-right flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        onClick={() => setSelectedOrder(order)}
+                                        className="minimal-btn-secondary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                      >
+                                        Details
+                                      </button>
+                                      
+                                      {order.orderStatus === 'pending' && (
+                                        <>
+                                          <button
+                                            onClick={() => handleStatusChange(order.id, 'completed')}
+                                            className="bg-success hover:bg-[#235e26] text-white px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                          >
+                                            Complete
+                                          </button>
+                                          <button
+                                            onClick={() => handleCancelOrder(order.id)}
+                                            className="border border-error/20 hover:bg-error/5 text-error px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </>
+                                      )}
+
+                                      {order.orderStatus === 'completed' && (
+                                        <button
+                                          onClick={() => handleStatusChange(order.id, 'pending')}
+                                          className="border border-primary/20 hover:bg-primary/5 text-primary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                          title="Revert to Pending"
+                                        >
+                                          Revert
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                </React.Fragment>
+                              );
+                            });
+                          })()}
                         </tbody>
                       </table>
                     </div>
@@ -1079,7 +1239,307 @@ export default function OwnerDashboardPage() {
             </div>
           )}
 
-          {/* F. PROFILE WORKSPACE */}
+          {/* F. AUDIT LOGS WORKSPACE */}
+          {activeWorkspace === 'audit' && (() => {
+            const filteredLogs = auditLogs.filter(log => {
+              const actionMatch = auditActionFilter === 'all' || log.action === auditActionFilter;
+              const searchMatch = !auditQuery.trim() || 
+                log.action.toLowerCase().includes(auditQuery.toLowerCase()) ||
+                log.actorUid.toLowerCase().includes(auditQuery.toLowerCase()) ||
+                log.targetId.toLowerCase().includes(auditQuery.toLowerCase()) ||
+                (log.actorRole && log.actorRole.toLowerCase().includes(auditQuery.toLowerCase()));
+              return actionMatch && searchMatch;
+            });
+
+            return (
+              <div className="flex flex-col gap-6 animate-slide-in">
+                {/* Search & Filter Header */}
+                <div className="bg-surface border border-border p-4.5 rounded-xl flex flex-col sm:flex-row items-center gap-3.5 shadow-xs">
+                  <div className="flex-1 w-full flex flex-col gap-1">
+                    <label className="text-[10px] text-text-muted font-bold uppercase">Search Logs</label>
+                    <input
+                      type="text"
+                      placeholder="Search by action, ID, role..."
+                      value={auditQuery}
+                      onChange={(e) => setAuditQuery(e.target.value)}
+                      className="minimal-input px-3.5 py-2.5 text-xs text-white placeholder-text-muted/40 w-full"
+                    />
+                  </div>
+                  <div className="w-full sm:w-56 flex flex-col gap-1">
+                    <label className="text-[10px] text-text-muted font-bold uppercase">Action Filter</label>
+                    <select
+                      value={auditActionFilter}
+                      onChange={(e) => setAuditActionFilter(e.target.value)}
+                      className="minimal-input px-3 py-2 text-xs text-zinc-300 focus:outline-none bg-surface-header"
+                    >
+                      <option value="all">All Actions</option>
+                      <option value="staffCreated">Staff Registered</option>
+                      <option value="staffDeactivated">Staff Deactivated</option>
+                      <option value="staffRemoved">Staff Removed</option>
+                      <option value="orderCreated">Order Placed</option>
+                      <option value="orderCompleted">Order Completed</option>
+                      <option value="orderCancelled">Order Cancelled</option>
+                      <option value="menuItemCreated">Menu Item Created</option>
+                      <option value="menuItemUpdated">Menu Item Updated</option>
+                      <option value="menuItemDeleted">Menu Item Deleted</option>
+                      <option value="tokenRecharged">Token Recharged</option>
+                      <option value="tokenDeducted">Token Deducted</option>
+                      <option value="tokenRefunded">Token Refunded</option>
+                      <option value="tokenAdjusted">Token Adjusted</option>
+                      <option value="monthlyLimitChanged">Limit Changed</option>
+                      <option value="settingsUpdated">Settings Updated</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Audit Logs Table */}
+                <div className="minimal-card rounded-xl overflow-hidden bg-surface border border-border shadow-sm">
+                  <div className="bg-surface-header/80 px-4 py-3 border-b border-border flex justify-between items-center">
+                    <h3 className="text-xs font-bold text-foreground">Operational Audit Log</h3>
+                    <span className="text-xs text-text-muted font-mono font-bold">{filteredLogs.length} events logged</span>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    {filteredLogs.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-text-muted font-bold">
+                        No audit logs matching search filters
+                      </div>
+                    ) : (
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-surface-header/40 border-b border-border text-text-muted font-bold">
+                            <th className="p-3.5 pl-5 w-40">Timestamp</th>
+                            <th className="p-3.5 w-36">Action</th>
+                            <th className="p-3.5 w-32">Actor</th>
+                            <th className="p-3.5 w-28">Target ID</th>
+                            <th className="p-3.5">Details / Changes</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {filteredLogs.map(log => {
+                            let actionLabel = log.action;
+                            let actionColor = 'text-foreground bg-surface-container';
+                            
+                            if (log.action.includes('Created')) {
+                              actionColor = 'text-success bg-success/5 border border-success/15';
+                            } else if (log.action.includes('Deactivated') || log.action.includes('Removed') || log.action.includes('Cancelled')) {
+                              actionColor = 'text-error bg-error/5 border border-error/15';
+                            } else if (log.action.includes('Deducted')) {
+                              actionColor = 'text-blue-400 bg-blue-500/5 border border-blue-500/10';
+                            } else if (log.action.includes('Recharged') || log.action.includes('Refunded')) {
+                              actionColor = 'text-primary bg-primary/5 border border-primary/10';
+                            }
+
+                            let details = '';
+                            if (log.action === 'tokenRecharged' && log.after) {
+                              details = `Recharged +${log.after.tokens} tokens`;
+                            } else if (log.action === 'tokenDeducted' && log.after) {
+                              details = `Deducted -${log.after.tokens} tokens for Order #${log.after.orderId}`;
+                            } else if (log.action === 'tokenRefunded' && log.after) {
+                              details = `Refunded +${log.after.tokens} tokens for Cancelled Order #${log.after.orderId}`;
+                            } else if (log.action === 'tokenAdjusted' && log.before && log.after) {
+                              details = `Manual correction: ${log.before.tokens} -> ${log.after.tokens}`;
+                            } else if (log.action === 'orderCreated' && log.after) {
+                              details = `Placed order for Table ${log.after.tableNumber} (Total: ₹${log.after.total})`;
+                            } else if (log.action === 'monthlyLimitChanged' && log.before && log.after) {
+                              details = `Limit adjusted: ${log.before.monthlyTokenLimit} -> ${log.after.monthlyTokenLimit} tokens`;
+                            } else if (log.action === 'settingsUpdated' && log.after) {
+                              details = `Outlet properties or conversion rates modified`;
+                            } else if (log.before || log.after) {
+                              details = JSON.stringify(log.after || log.before);
+                            } else {
+                              details = 'N/A';
+                            }
+
+                            return (
+                              <tr key={log.id} className="hover:bg-surface-container/10 transition-colors">
+                                <td className="p-3.5 pl-5 font-mono text-text-muted">
+                                  {new Date(log.timestamp).toLocaleString(undefined, {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                  })}
+                                </td>
+                                <td className="p-3.5">
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${actionColor}`}>
+                                    {actionLabel}
+                                  </span>
+                                </td>
+                                <td className="p-3.5 font-semibold text-foreground">
+                                  <div className="flex flex-col">
+                                    <span>{log.actorRole === 'owner' ? 'Sarah (Owner)' : 'Staff Member'}</span>
+                                    <span className="text-[9px] text-text-muted font-mono">{log.actorUid}</span>
+                                  </div>
+                                </td>
+                                <td className="p-3.5 font-mono text-text-muted">#{log.targetId}</td>
+                                <td className="p-3.5 font-semibold text-text-muted italic">{details}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* G. OUTLET SETTINGS WORKSPACE */}
+          {activeWorkspace === 'settings' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-in">
+              <form 
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const val = parseFloat(tokenValueInRupees);
+                  const limit = parseInt(monthlyTokenLimitDefaults);
+                  if (isNaN(val) || val <= 0) {
+                    alert('Token conversion rate must be positive.');
+                    return;
+                  }
+                  if (isNaN(limit) || limit < 0) {
+                    alert('Default monthly token limit must be positive.');
+                    return;
+                  }
+                  await updateSettings({
+                    outletName: outletName.trim(),
+                    tokenValueInRupees: val,
+                    manualUpiEnabled,
+                    taxEnabled,
+                    currency,
+                    receiptFooter: receiptFooter.trim(),
+                    monthlyTokenLimitDefaults: limit
+                  });
+                }}
+                className="lg:col-span-2 minimal-card rounded-xl bg-surface border border-border p-5 flex flex-col gap-4 text-xs shadow-sm"
+              >
+                <div className="border-b border-border pb-3 flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-foreground">POS Terminal & Outlet Configuration</h3>
+                  <button
+                    type="submit"
+                    className="minimal-btn-primary px-4 py-2 h-9 min-h-0 text-xs font-bold rounded-lg text-white cursor-pointer"
+                  >
+                    Save Configuration
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Outlet Name */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-text-muted font-bold">Outlet Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Hau-Hau Outlet 1"
+                      value={outletName}
+                      onChange={(e) => setOutletName(e.target.value)}
+                      className="minimal-input px-3.5 py-2.5 text-xs text-white"
+                    />
+                  </div>
+
+                  {/* Token Rate */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-text-muted font-bold">Token Value (in Rupees)</label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3.5 text-text-muted font-bold">₹</span>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        placeholder="30"
+                        value={tokenValueInRupees}
+                        onChange={(e) => setTokenValueInRupees(e.target.value)}
+                        className="minimal-input pl-7 pr-3.5 py-2.5 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Default Monthly Limit */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-text-muted font-bold">Default Staff Monthly Token Limit</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      placeholder="1000"
+                      value={monthlyTokenLimitDefaults}
+                      onChange={(e) => setMonthlyTokenLimitDefaults(e.target.value)}
+                      className="minimal-input px-3.5 py-2.5 text-xs text-white font-mono"
+                    />
+                  </div>
+
+                  {/* Currency */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-text-muted font-bold">Currency Code</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="INR"
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="minimal-input px-3.5 py-2.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Text Footer */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-text-muted font-bold">Receipt Footer Message</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Footer printed on customer receipts..."
+                    value={receiptFooter}
+                    onChange={(e) => setReceiptFooter(e.target.value)}
+                    className="minimal-input px-3.5 py-2.5 text-xs text-white resize-none"
+                  />
+                </div>
+
+                {/* Option Toggles */}
+                <div className="flex flex-col gap-2.5 bg-surface-container/20 border border-border rounded-xl p-4">
+                  <label className="flex items-center gap-2.5 cursor-pointer font-semibold text-text-muted select-none">
+                    <input
+                      type="checkbox"
+                      checked={manualUpiEnabled}
+                      onChange={(e) => setManualUpiEnabled(e.target.checked)}
+                      className="accent-primary cursor-pointer w-4 h-4"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs text-foreground">Manual UPI Payment Mode</span>
+                      <span className="text-[10px] text-text-muted">Display UPI barcode option during checkout</span>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-2.5 cursor-pointer font-semibold text-text-muted select-none border-t border-border pt-2.5 mt-1">
+                    <input
+                      type="checkbox"
+                      checked={taxEnabled}
+                      onChange={(e) => setTaxEnabled(e.target.checked)}
+                      className="accent-primary cursor-pointer w-4 h-4"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs text-foreground">Include Service Tax / GST</span>
+                      <span className="text-[10px] text-text-muted">Apply tax calculation rules on orders</span>
+                    </div>
+                  </label>
+                </div>
+              </form>
+
+              <div className="lg:col-span-1 flex flex-col gap-4">
+                <div className="minimal-card rounded-xl bg-surface border border-border p-4.5 text-xs shadow-sm flex flex-col gap-3">
+                  <h4 className="font-bold text-foreground">Configuration Rules</h4>
+                  <p className="text-text-muted leading-relaxed">
+                    Changes made here affect all POS terminals under this outlet. Changing the token exchange value updates the price conversion in real-time.
+                  </p>
+                  <div className="bg-primary/5 border border-primary/20 p-3 rounded-lg text-primary text-[11px] leading-relaxed">
+                    <strong>Exchange Rate Note:</strong> Student cards and checkout will use 1 Token = ₹{tokenValueInRupees || '0.00'} as the baseline value.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* H. PROFILE WORKSPACE */}
           {activeWorkspace === 'profile' && (
             <ProfileSection />
           )}
@@ -1371,8 +1831,12 @@ export default function OwnerDashboardPage() {
                                   <div className="font-bold text-foreground">{tx.studentName}</div>
                                   <div className="text-[10px] text-text-muted font-mono">#{tx.cardNo}</div>
                                 </td>
-                                <td className="p-2.5 text-primary font-mono font-bold">+{tx.tokens}</td>
-                                <td className="p-2.5 text-success font-mono font-bold text-right">₹{tx.amount.toFixed(2)}</td>
+                                <td className={`p-2.5 font-mono font-bold ${tx.tokens < 0 ? 'text-error' : 'text-primary'}`}>
+                                  {tx.tokens > 0 ? '+' : ''}{tx.tokens}
+                                </td>
+                                <td className={`p-2.5 font-mono font-bold text-right ${tx.amount < 0 ? 'text-error' : 'text-success'}`}>
+                                  {tx.amount > 0 ? '+' : ''}₹{tx.amount.toFixed(2)}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -1604,8 +2068,8 @@ export default function OwnerDashboardPage() {
                         <tr className="border-b border-border bg-surface-header/60 text-text-muted">
                           <th className="p-2.5 font-bold">Transaction ID</th>
                           <th className="p-2.5 font-bold">Date & Time</th>
-                          <th className="p-2.5 font-bold">Tokens Added</th>
-                          <th className="p-2.5 font-bold">Amount Paid</th>
+                          <th className="p-2.5 font-bold">Tokens</th>
+                          <th className="p-2.5 font-bold">Amount</th>
                           <th className="p-2.5 font-bold">Operator</th>
                         </tr>
                       </thead>
@@ -1623,10 +2087,12 @@ export default function OwnerDashboardPage() {
                                   minute: '2-digit',
                                 })}
                               </td>
-                              <td className="p-2.5 text-primary font-mono font-bold">
-                                +{tx.tokens} tokens
+                              <td className={`p-2.5 font-mono font-bold ${tx.tokens < 0 ? 'text-error' : 'text-primary'}`}>
+                                {tx.tokens > 0 ? '+' : ''}{tx.tokens} tokens
                               </td>
-                              <td className="p-2.5 text-success font-mono font-bold">₹{tx.amount.toFixed(2)}</td>
+                              <td className={`p-2.5 font-mono font-bold ${tx.amount < 0 ? 'text-error' : 'text-success'}`}>
+                                {tx.amount > 0 ? '+' : ''}₹{tx.amount.toFixed(2)}
+                              </td>
                               <td className="p-2.5 text-foreground font-semibold">{tx.soldBy}</td>
                             </tr>
                           ))}

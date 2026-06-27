@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { useRouter } from 'next/navigation';
 import TableSelector from '@/components/TableSelector';
@@ -34,6 +34,7 @@ export default function StaffDashboardPage() {
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+  const [historyDateFilter, setHistoryDateFilter] = useState<'today' | 'all'>('today');
   const HISTORY_PER_PAGE = 8;
 
   // Token Hub states
@@ -46,6 +47,31 @@ export default function StaffDashboardPage() {
   const menuCategories = Array.from(new Set(menu.map(item => item.category))).filter(Boolean);
   const existingCategories = menuCategories.length > 0 ? menuCategories : ['Burgers', 'Sides', 'Drinks', 'Combo'];
   const categories = ['All', ...existingCategories];
+
+  // Filter orders created by this staff — sorted newest first, supporting day-wise filtering
+  const staffOrders = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    return orders
+      .filter(order => {
+        if (order.staffId !== currentUser?.username) return false;
+        if (historyDateFilter === 'today') {
+          const orderDateStr = new Date(order.createdAt).toLocaleDateString('en-CA');
+          return orderDateStr === todayStr;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [orders, currentUser?.username, historyDateFilter]);
+
+  // Filter shift sales summary (only for today to ensure fresh dashboard everyday)
+  const shiftTransactions = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    return tokenTransactions.filter(tx => {
+      if (tx.soldBy !== currentUser?.username) return false;
+      const txDateStr = new Date(tx.createdAt).toLocaleDateString('en-CA');
+      return txDateStr === todayStr;
+    });
+  }, [tokenTransactions, currentUser?.username]);
 
   // Authenticate check
   useEffect(() => {
@@ -67,11 +93,6 @@ export default function StaffDashboardPage() {
   const filteredMenu = menu.filter(item => 
     activeCategory === 'All' ? true : item.category === activeCategory
   );
-
-  // Filter orders created by this staff — sorted newest first
-  const staffOrders = [...orders]
-    .filter(order => order.staffId === currentUser.username)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const historyPageCount = Math.max(1, Math.ceil(staffOrders.length / HISTORY_PER_PAGE));
   const safeHistoryPage  = Math.min(historyPage, historyPageCount);
@@ -145,10 +166,6 @@ export default function StaffDashboardPage() {
     ? tokenTransactions.filter(tx => tx.studentId === selectedStudent.id)
     : [];
 
-  // Filter shift sales summary
-  const shiftTransactions = tokenTransactions.filter(
-    tx => tx.soldBy === currentUser.username
-  );
   const shiftTokensSold = shiftTransactions.reduce((sum, tx) => sum + tx.tokens, 0);
   const shiftRupeesCollected = shiftTransactions.reduce((sum, tx) => sum + tx.amount, 0);
 
@@ -280,7 +297,7 @@ export default function StaffDashboardPage() {
                 </div>
 
                 {/* Menu items list (internal scroll) */}
-                <div className="flex-1 overflow-y-auto pr-1 pb-4">
+                <div className="flex-1 overflow-y-auto pr-1 pb-24 lg:pb-12">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredMenu.map((item) => (
                       <MenuItemCard key={item.id} item={item} />
@@ -299,7 +316,7 @@ export default function StaffDashboardPage() {
 
         {/* 2. TOKEN HUB WORKSPACE */}
         {activeWorkspace === 'tokens' && (
-          <div className="flex-1 overflow-y-auto pr-1">
+          <div className="flex-1 overflow-y-auto pr-1 pb-24 lg:pb-12">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-in">
               {/* Left Column: Search & Selected Student details (2/3 width) */}
               <div className="lg:col-span-2 flex flex-col gap-6">
@@ -459,8 +476,8 @@ export default function StaffDashboardPage() {
                                 <thead>
                                     <tr className="border-b border-border bg-surface-header/60 text-text-muted">
                                       <th className="p-2.5 font-bold">Date & Time</th>
-                                      <th className="p-2.5 font-bold">Tokens Added</th>
-                                      <th className="p-2.5 font-bold">Amount Paid</th>
+                                      <th className="p-2.5 font-bold">Tokens</th>
+                                      <th className="p-2.5 font-bold">Amount</th>
                                       <th className="p-2.5 font-bold">Operator</th>
                                     </tr>
                                   </thead>
@@ -475,8 +492,12 @@ export default function StaffDashboardPage() {
                                             minute: '2-digit'
                                           })}
                                         </td>
-                                        <td className="p-2.5 text-primary font-mono font-bold">+{tx.tokens} tokens</td>
-                                        <td className="p-2.5 text-success font-mono font-bold">₹{tx.amount.toFixed(2)}</td>
+                                        <td className={`p-2.5 font-mono font-bold ${tx.tokens < 0 ? 'text-error' : 'text-primary'}`}>
+                                          {tx.tokens > 0 ? '+' : ''}{tx.tokens} tokens
+                                        </td>
+                                        <td className={`p-2.5 font-mono font-bold ${tx.amount < 0 ? 'text-error' : 'text-success'}`}>
+                                          {tx.amount > 0 ? '+' : ''}₹{tx.amount.toFixed(2)}
+                                        </td>
                                         <td className="p-2.5 text-foreground font-semibold">{tx.soldBy}</td>
                                       </tr>
                                     ))}
@@ -633,23 +654,51 @@ export default function StaffDashboardPage() {
 
         {/* 3. HISTORY WORKSPACE */}
         {activeWorkspace === 'history' && (
-          <div className="flex-1 overflow-y-auto pr-1 animate-slide-in max-w-4xl mx-auto w-full">
+          <div className="flex-1 overflow-y-auto pr-1 pb-24 lg:pb-12 animate-slide-in max-w-4xl mx-auto w-full">
             <div className="minimal-card p-6 rounded-xl bg-surface border border-border">
-              <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 mb-4 gap-3">
                 <div>
                   <h2 className="text-sm text-foreground font-bold">
-                    Today&apos;s Placed Orders
+                    {historyDateFilter === 'today' ? "Today's Placed Orders" : "All Placed Orders"}
                   </h2>
-                  <p className="text-xs text-text-muted mt-0.5">Recent orders fulfilled or pending during this shift</p>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    {historyDateFilter === 'today' ? "Recent orders placed during today's shift" : "All historical orders placed by you"}
+                  </p>
                 </div>
-                <span className="text-xs font-mono text-text-muted font-bold bg-surface-header border border-border px-3 py-1 rounded-lg">
-                  Total: {staffOrders.length}
-                </span>
+                
+                <div className="flex items-center gap-3">
+                  <div className="flex bg-surface-header border border-border p-0.5 rounded-lg text-xs font-bold">
+                    {(['today', 'all'] as const).map((filter) => {
+                      const isSelected = historyDateFilter === filter;
+                      return (
+                        <button
+                          key={filter}
+                          onClick={() => {
+                            setHistoryDateFilter(filter);
+                            setHistoryPage(1);
+                          }}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary text-white font-bold'
+                              : 'text-text-muted hover:text-foreground'
+                          }`}
+                        >
+                          {filter === 'today' ? 'Today' : 'All Time'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-xs font-mono text-text-muted font-bold bg-surface-header border border-border px-3 py-1.5 rounded-lg">
+                    Total: {staffOrders.length}
+                  </span>
+                </div>
               </div>
               
               {staffOrders.length === 0 ? (
                 <div className="py-12 text-center text-xs text-text-muted font-medium">
-                  No orders placed during this shift yet
+                  {historyDateFilter === 'today' 
+                    ? "No orders placed today yet" 
+                    : "No orders found in history"}
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
@@ -669,7 +718,7 @@ export default function StaffDashboardPage() {
                           {order.items.map(i => `${i.name} (${i.quantity})`).join(', ')}
                         </span>
                         <span className="text-[10px] text-text-muted font-medium">
-                          Placed at {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          Placed at {new Date(order.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       <div className="flex items-center gap-4">

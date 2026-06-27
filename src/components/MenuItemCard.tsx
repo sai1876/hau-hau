@@ -154,7 +154,7 @@ export function MenuItemCard({ item }: MenuItemCardProps) {
           )
         ) : (
           <div className="w-full bg-surface-container/50 border border-border text-text-muted text-xs font-bold py-2 rounded-lg flex items-center justify-center mt-1 h-9 select-none">
-            Unavailable
+            Out of Stock
           </div>
         )}
       </div>

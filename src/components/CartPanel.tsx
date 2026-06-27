@@ -15,29 +15,39 @@ export function CartPanel({ onClose }: CartPanelProps) {
     removeFromCart, 
     clearTableCart, 
     confirmOrder,
-    confirmAction
+    confirmAction,
+    tokens,
+    settings
   } = useApp();
 
   const [paymentMode, setPaymentMode] = useState<'cash' | 'online' | 'tokens' | null>(null);
+  const [tokenCardInput, setTokenCardInput] = useState('');
 
   const cartItems = activeTable ? tableCarts[activeTable] || [] : [];
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const requiredTokens = Math.round((subtotal / 30) * 100) / 100;
+  const tokenValue = settings?.tokenValueInRupees || 30;
+  const requiredTokens = Math.round((subtotal / tokenValue) * 100) / 100;
+
+  const studentCard = tokens.find(t => t.cardNo === tokenCardInput.trim());
+  const hasSufficientTokens = studentCard ? studentCard.tokens >= requiredTokens : false;
 
   const isValid = 
     activeTable !== null && 
     cartItems.length > 0 && 
-    paymentMode !== null;
+    paymentMode !== null &&
+    (paymentMode !== 'tokens' || (tokenCardInput.trim() !== '' && studentCard !== undefined && hasSufficientTokens));
 
   const handlePaymentModeChange = (mode: 'cash' | 'online' | 'tokens' | null) => {
     setPaymentMode(mode);
+    setTokenCardInput('');
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!isValid || !paymentMode) return;
-    const success = confirmOrder(paymentMode);
+    const success = await confirmOrder(paymentMode, paymentMode === 'tokens' ? tokenCardInput.trim() : undefined);
     if (success) {
       setPaymentMode(null);
+      setTokenCardInput('');
       if (onClose) onClose();
     }
   };
@@ -195,12 +205,42 @@ export function CartPanel({ onClose }: CartPanelProps) {
           </div>
 
           {paymentMode === 'tokens' && (
-            <div className="flex flex-col gap-2 bg-blue-500/5 border border-blue-500/20 p-3 rounded-lg animate-fade-in mt-1">
+            <div className="flex flex-col gap-3 bg-blue-500/5 border border-blue-500/20 p-3.5 rounded-lg animate-fade-in mt-1">
               <div className="flex justify-between items-center text-[10px] font-bold text-blue-400 uppercase tracking-wider">
-                <span>Deduction Estimate</span>
-                <span className="font-mono text-text-muted">Rate: ₹30/token</span>
+                <span>Token Payment Details</span>
+                <span className="font-mono text-text-muted">Rate: ₹{tokenValue}/token</span>
               </div>
-              <div className="flex justify-between items-center font-mono text-xs">
+              
+              <div className="flex flex-col gap-1.5 mt-1">
+                <label className="text-[10px] text-text-muted font-bold uppercase">Student Card Number</label>
+                <input
+                  type="text"
+                  placeholder="Enter card number (e.g. 001)"
+                  value={tokenCardInput}
+                  onChange={(e) => setTokenCardInput(e.target.value.replace(/\D/g, ''))}
+                  className="minimal-input px-3 py-2 text-xs font-mono font-bold tracking-widest text-white placeholder-text-muted/40 w-full"
+                />
+              </div>
+
+              {tokenCardInput.trim() !== '' && (
+                <div className="text-[11px] font-semibold">
+                   {!studentCard ? (
+                     <span className="text-error font-bold flex items-center gap-1">⚠ Card not found</span>
+                   ) : !hasSufficientTokens ? (
+                     <span className="text-error font-bold flex flex-col gap-0.5">
+                       <span>⚠ Insufficient balance</span>
+                       <span className="text-[9px] opacity-80">Has: {studentCard.tokens.toFixed(2)} tokens, Needs: {requiredTokens.toFixed(2)}</span>
+                     </span>
+                   ) : (
+                     <div className="flex flex-col gap-0.5 text-success">
+                       <span className="font-bold">✓ Verified: {studentCard.name}</span>
+                       <span className="text-[10px] opacity-80">Balance: {studentCard.tokens.toFixed(2)} tokens</span>
+                     </div>
+                   )}
+                </div>
+              )}
+
+              <div className="flex justify-between items-center font-mono text-xs border-t border-blue-500/10 pt-2 mt-1">
                 <span className="text-text-muted font-sans text-[11px]">Tokens Required:</span>
                 <span className="text-blue-400 font-bold text-sm">{requiredTokens} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-400" /></span>
               </div>

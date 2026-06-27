@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { X as XIcon } from '@phosphor-icons/react';
 import { db } from '../services/db';
-import { MenuItem, Order, StaffAccount, CartItem, TokenAccount, TokenTransaction } from '../types';
+import { MenuItem, Order, StaffAccount, CartItem, TokenAccount, TokenTransaction, AuditLog, Settings } from '../types';
 import { useRouter } from 'next/navigation';
 import { auth, firestore } from '@/services/firebase';
 import { 
@@ -40,7 +40,7 @@ interface AppContextType {
   updateCartQuantity: (itemId: string, change: number) => void;
   removeFromCart: (itemId: string) => void;
   clearTableCart: (table: string) => void;
-  confirmOrder: (paymentMode: 'cash' | 'online' | 'tokens') => boolean;
+  confirmOrder: (paymentMode: 'cash' | 'online' | 'tokens', tokenCardNo?: string) => Promise<boolean>;
   
   // Owner actions
   toggleMenuItem: (itemId: string) => void;
@@ -60,6 +60,12 @@ interface AppContextType {
   updateToken: (tokenId: string, updatedFields: Partial<Omit<TokenAccount, 'id'>>) => Promise<boolean>;
   removeToken: (tokenId: string) => Promise<boolean>;
   sellTokens: (studentId: string, tokens: number, amount: number) => Promise<boolean>;
+  adjustTokens: (studentId: string, targetTokens: number, reason: string) => Promise<boolean>;
+  
+  // Settings & Audit Logs
+  settings: Settings;
+  auditLogs: AuditLog[];
+  updateSettings: (updatedFields: Partial<Settings>) => Promise<boolean>;
   
   // Toasts
   addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -80,6 +86,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [staffList, setStaffList] = useState<StaffAccount[]>([]);
   const [tokens, setTokens] = useState<TokenAccount[]>([]);
   const [tokenTransactions, setTokenTransactions] = useState<TokenTransaction[]>([]);
+  const [settings, setSettings] = useState<Settings>({
+    id: 'settings_default',
+    outletId: 'main_outlet',
+    outletName: 'Hau-Hau Outlet 1',
+    tokenValueInRupees: 30,
+    manualUpiEnabled: true,
+    taxEnabled: false,
+    currency: 'INR',
+    receiptFooter: 'Thank you for dining with Hau-Hau!',
+    monthlyTokenLimitDefaults: 1000,
+    orderStatusFlow: ['pending', 'completed', 'cancelled']
+  });
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [currentUser, setCurrentUser] = useState<AppContextType['currentUser']>(null);
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
@@ -169,6 +188,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setTokenTransactions(updatedTxs);
     });
 
+    // 6. Subscribe to Settings
+    const unsubSettings = db.subscribeSettings((updatedSettings) => {
+      setSettings(updatedSettings);
+    });
+
+    // 7. Subscribe to Audit Logs
+    const unsubAuditLogs = db.subscribeAuditLogs((updatedLogs) => {
+      setAuditLogs(updatedLogs);
+    });
+
     // Defer state updates to prevent synchronous setState inside useEffect
     let unsubAuth = () => {};
     const timer = setTimeout(() => {
@@ -233,6 +262,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubStaff();
       unsubTokens();
       unsubTransactions();
+      unsubSettings();
+      unsubAuditLogs();
       unsubAuth();
       clearTimeout(timer);
     };
@@ -368,6 +399,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addToast('Logged out successfully.', 'info');
     router.push('/login');
   };
+
+  // Auto-logout deactivated staff
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'staff') {
+      const currentProfile = staffList.find(s => s.username === currentUser.username);
+      if (currentProfile && currentProfile.status === 'inactive') {
+        addToast('Your account has been deactivated.', 'error');
+        logout();
+      }
+    }
+  }, [currentUser, staffList, addToast]);
 
   const updateProfile = async (updatedFields: { name?: string; password?: string; emailOrPhone?: string }): Promise<boolean> => {
     if (!currentUser) {
@@ -536,7 +578,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addToast(`Cart cleared for Table ${table}`, 'info');
   };
 
-  const confirmOrder = (paymentMode: 'cash' | 'online' | 'tokens'): boolean => {
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
+  const confirmOrder = async (paymentMode: 'cash' | 'online' | 'tokens', tokenCardNo?: string): Promise<boolean> => {
     if (!activeTable) {
       addToast('Table number is required.', 'error');
       return false;
@@ -553,44 +597,102 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
-    const subtotal = currentCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-
-    let extraOrderFields = {};
-
-    if (paymentMode === 'tokens') {
-      const tokensDeducted = Math.round((subtotal / 30) * 100) / 100;
-      extraOrderFields = {
-        tokensDeducted: tokensDeducted
-      };
+    if (isSubmittingOrder) {
+      return false;
     }
 
-    db.createOrder({
-      tableNumber: activeTable,
-      items: currentCart,
-      total: subtotal,
-      paymentMode,
-      staffId: currentUser?.username || 's1',
-      staffName: currentUser?.name || 'Alex Johnson',
-      ...extraOrderFields
-    });
+    setIsSubmittingOrder(true);
 
-    // Clear cart for this table
-    setTableCarts(prev => {
-      const copy = { ...prev };
-      delete copy[activeTable];
-      return copy;
-    });
-    
-    // Clear in localStorage
-    const savedCarts = localStorage.getItem('hau_hau_table_carts');
-    if (savedCarts) {
-      const parsed = JSON.parse(savedCarts);
-      delete parsed[activeTable];
-      localStorage.setItem('hau_hau_table_carts', JSON.stringify(parsed));
+    try {
+      const subtotal = currentCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+      let extraOrderFields: Partial<Order> = {};
+
+      if (paymentMode === 'tokens') {
+        if (!tokenCardNo) {
+          addToast('Token card number is required for token payment.', 'error');
+          setIsSubmittingOrder(false);
+          return false;
+        }
+
+        const studentCard = tokens.find(t => t.cardNo === tokenCardNo);
+        if (!studentCard) {
+          addToast('Student card not found with that card number.', 'error');
+          setIsSubmittingOrder(false);
+          return false;
+        }
+
+        const tokensRequired = Math.round((subtotal / settings.tokenValueInRupees) * 100) / 100;
+        if (studentCard.tokens < tokensRequired) {
+          addToast(`Insufficient tokens! Card has ${studentCard.tokens}, required: ${tokensRequired}`, 'error');
+          setIsSubmittingOrder(false);
+          return false;
+        }
+
+        const orderId = 'HH-' + Math.floor(1000 + Math.random() * 9000);
+
+        // Deduct tokens atomically
+        await db.deductTokensTransaction(
+          studentCard.id,
+          tokensRequired,
+          orderId,
+          currentUser?.username || 'unknown',
+          auth.currentUser?.uid || 'local',
+          currentUser?.role || 'staff'
+        );
+
+        extraOrderFields = {
+          id: orderId,
+          tokenCardNo,
+          studentName: studentCard.name,
+          tokensDeducted: tokensRequired
+        };
+      }
+
+      const createdOrder = await db.createOrder({
+        tableNumber: activeTable,
+        items: currentCart,
+        total: subtotal,
+        paymentMode,
+        staffId: currentUser?.username || 'unknown',
+        staffName: currentUser?.name || 'unknown',
+        outletId: settings.outletId || 'main_outlet',
+        ...extraOrderFields
+      });
+
+      // Write audit log for order created
+      await db.addAuditLog({
+        action: 'orderCreated',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: currentUser?.role || 'staff',
+        targetId: createdOrder.id,
+        outletId: settings.outletId || 'main_outlet',
+        after: { total: subtotal, paymentMode, tableNumber: activeTable }
+      });
+
+      // Clear cart for this table
+      setTableCarts(prev => {
+        const copy = { ...prev };
+        delete copy[activeTable];
+        return copy;
+      });
+      
+      // Clear in localStorage
+      const savedCarts = localStorage.getItem('hau_hau_table_carts');
+      if (savedCarts) {
+        const parsed = JSON.parse(savedCarts);
+        delete parsed[activeTable];
+        localStorage.setItem('hau_hau_table_carts', JSON.stringify(parsed));
+      }
+
+      addToast(`Order sent successfully for Table ${activeTable}!`, 'success');
+      setIsSubmittingOrder(false);
+      return true;
+    } catch (err: any) {
+      console.error("Confirm order failed:", err);
+      addToast(err.message || 'Failed to place order.', 'error');
+      setIsSubmittingOrder(false);
+      return false;
     }
-
-    addToast(`Order sent successfully for Table ${activeTable}!`, 'success');
-    return true;
   };
 
   // Owner Operations
@@ -604,11 +706,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateOrderStatus = async (orderId: string, status: 'pending' | 'completed' | 'cancelled') => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) {
+      addToast('Order not found.', 'error');
+      return;
+    }
+
+    if (order.orderStatus === 'cancelled') {
+      addToast('Cancelled orders cannot be completed or modified.', 'error');
+      return;
+    }
+
     try {
+      if (status === 'cancelled' && order.paymentMode === 'tokens' && order.tokenCardNo && order.tokensDeducted) {
+        const studentCard = tokens.find(t => t.cardNo === order.tokenCardNo);
+        if (studentCard) {
+          await db.refundTokensTransaction(
+            studentCard.id,
+            order.tokensDeducted,
+            orderId,
+            auth.currentUser?.uid || 'local',
+            currentUser?.role || 'owner'
+          );
+        } else {
+          console.warn(`Card ${order.tokenCardNo} not found for refund. Proceeding with cancellation.`);
+        }
+      }
+
       await db.updateOrderStatus(orderId, status);
+
+      await db.addAuditLog({
+        action: status === 'completed' ? 'orderCompleted' : status === 'cancelled' ? 'orderCancelled' : 'orderCreated',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: currentUser?.role || 'owner',
+        targetId: orderId,
+        outletId: settings.outletId || 'main_outlet',
+        before: { orderStatus: order.orderStatus },
+        after: { orderStatus: status }
+      });
+
       addToast(`Order ${orderId} marked as ${status}`, 'success');
-    } catch {
-      addToast('Failed to update order status', 'error');
+    } catch (err: any) {
+      console.error("Failed to update order status:", err);
+      addToast(err.message || 'Failed to update order status.', 'error');
     }
   };
 
@@ -644,12 +784,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await deleteApp(secondaryApp);
 
         // Save doc in firestore
-        await db.addStaffWithId(cred.user.uid, {
+        const createdStaff = await db.addStaffWithId(cred.user.uid, {
           name: account.name,
           emailOrPhone: account.emailOrPhone,
           username: account.username.trim().toLowerCase(),
           password: await hashPassword(account.password),
-          status: 'active'
+          status: 'active',
+          outletId: settings.outletId || 'main_outlet'
+        });
+
+        // Write audit log for staff created
+        await db.addAuditLog({
+          action: 'staffCreated',
+          actorUid: auth.currentUser?.uid || 'local',
+          actorRole: 'owner',
+          targetId: createdStaff.id,
+          outletId: settings.outletId || 'main_outlet',
+          after: { username: account.username, name: account.name }
         });
 
         addToast(`Staff account for ${account.name} created!`, 'success');
@@ -671,19 +822,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } else {
       // LocalStorage mode
       const hashedPass = await hashPassword(account.password);
-      db.addStaff({
+      const createdStaff = await db.addStaff({
         ...account,
         password: hashedPass,
-        status: 'active'
+        status: 'active',
+        outletId: settings.outletId || 'main_outlet'
       });
+
+      // Write audit log for staff created
+      await db.addAuditLog({
+        action: 'staffCreated',
+        actorUid: 'local',
+        actorRole: 'owner',
+        targetId: createdStaff.id,
+        outletId: settings.outletId || 'main_outlet',
+        after: { username: account.username, name: account.name }
+      });
+
       addToast(`Staff account for ${account.name} created!`, 'success');
       return true;
     }
   };
 
   const toggleStaff = async (staffId: string) => {
+    const staff = staffList.find(s => s.id === staffId);
+    if (!staff) return;
+    const newStatus = staff.status === 'active' ? 'inactive' : 'active';
     try {
       await db.toggleStaffStatus(staffId);
+      
+      await db.addAuditLog({
+        action: newStatus === 'inactive' ? 'staffDeactivated' : 'staffCreated',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: 'owner',
+        targetId: staffId,
+        outletId: settings.outletId || 'main_outlet',
+        before: { status: staff.status },
+        after: { status: newStatus }
+      });
+
       addToast('Staff status changed', 'success');
     } catch {
       addToast('Failed to update staff status', 'error');
@@ -693,6 +870,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const removeStaff = async (staffId: string) => {
     try {
       await db.deleteStaff(staffId);
+
+      await db.addAuditLog({
+        action: 'staffRemoved',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: 'owner',
+        targetId: staffId,
+        outletId: settings.outletId || 'main_outlet'
+      });
+
       addToast('Staff account deleted', 'success');
     } catch {
       addToast('Failed to delete staff account', 'error');
@@ -702,7 +888,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Menu Management Operations
   const createNewMenuItem = async (item: Omit<MenuItem, 'id' | 'available'>): Promise<MenuItem | null> => {
     try {
-      const newItem = await db.addMenuItem(item);
+      const newItem = await db.addMenuItem({
+        ...item,
+        outletId: settings.outletId || 'main_outlet'
+      });
+
+      await db.addAuditLog({
+        action: 'menuItemCreated',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: 'owner',
+        targetId: newItem.id,
+        outletId: settings.outletId || 'main_outlet',
+        after: { name: newItem.name, price: newItem.price }
+      });
+
       addToast(`Menu item "${item.name}" created successfully!`, 'success');
       return newItem;
     } catch {
@@ -714,6 +913,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const removeMenuItem = async (itemId: string) => {
     try {
       await db.deleteMenuItem(itemId);
+
+      await db.addAuditLog({
+        action: 'menuItemDeleted',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: 'owner',
+        targetId: itemId,
+        outletId: settings.outletId || 'main_outlet'
+      });
+
       addToast('Menu item deleted successfully', 'success');
     } catch {
       addToast('Failed to delete menu item', 'error');
@@ -722,7 +930,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateMenuItem = async (itemId: string, updatedFields: Partial<Omit<MenuItem, 'id'>>): Promise<boolean> => {
     try {
+      const itemBefore = menu.find(m => m.id === itemId);
       await db.updateMenuItem(itemId, updatedFields);
+
+      await db.addAuditLog({
+        action: 'menuItemUpdated',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: 'owner',
+        targetId: itemId,
+        outletId: settings.outletId || 'main_outlet',
+        before: itemBefore ? { price: itemBefore.price, available: itemBefore.available } : null,
+        after: updatedFields
+      });
+
       addToast('Menu item updated successfully!', 'success');
       return true;
     } catch {
@@ -760,7 +980,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const createdCard = await db.addTokenAccount(account);
+      const createdCard = await db.addTokenAccount({
+        ...account,
+        outletId: settings.outletId || 'main_outlet'
+      });
+      
       // Log transaction if card was initialized with tokens
       if (account.tokens > 0) {
         await db.addTokenTransaction({
@@ -769,8 +993,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           studentName: createdCard.name,
           cardNo: createdCard.cardNo,
           tokens: account.tokens,
-          amount: account.tokens * 30,
-          soldBy: currentUser?.username || 'unknown'
+          amount: account.tokens * settings.tokenValueInRupees,
+          soldBy: currentUser?.username || 'unknown',
+          outletId: settings.outletId || 'main_outlet'
+        });
+
+        // Audit Log for token recharged on create
+        await db.addAuditLog({
+          action: 'tokenRecharged',
+          actorUid: auth.currentUser?.uid || 'local',
+          actorRole: currentUser?.role || 'owner',
+          targetId: createdCard.id,
+          outletId: settings.outletId || 'main_outlet',
+          after: { tokens: account.tokens }
         });
       }
       addToast(`Token card for ${account.name} created!`, 'success');
@@ -799,7 +1034,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      const tokenBefore = tokens.find(t => t.id === tokenId);
       await db.updateTokenAccount(tokenId, { ...updatedFields, updatedAt: new Date().toISOString() });
+      
+      await db.addAuditLog({
+        action: 'tokenAdjusted',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: 'owner',
+        targetId: tokenId,
+        outletId: settings.outletId || 'main_outlet',
+        before: tokenBefore ? { tokens: tokenBefore.tokens, cardNo: tokenBefore.cardNo } : null,
+        after: updatedFields
+      });
+
       addToast('Token card updated successfully!', 'success');
       return true;
     } catch {
@@ -846,34 +1093,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      // TODO (security/reliability): This balance update is NOT atomic.
-      // Two simultaneous recharges to the same account could cause a race condition
-      // where one update overwrites the other.
-      // Recommended fix: Use a Firestore Transaction (runTransaction) or a
-      // Cloud Function with FieldValue.increment() for safe concurrent updates.
-      // See SECURITY.md for the implementation path.
-      const newBalance = Math.round((studentCard.tokens + tokensToAdd) * 100) / 100;
-      await db.updateTokenAccount(studentId, {
-        tokens: newBalance,
-        updatedAt: new Date().toISOString()
-      });
-
-      // Create immutable token transaction log
-      await db.addTokenTransaction({
-        type: 'recharge',
+      await db.rechargeTokensTransaction(
         studentId,
-        studentName: studentCard.name,
-        cardNo: studentCard.cardNo,
-        tokens: tokensToAdd,
-        amount: amountPaid,
-        soldBy: currentUser?.username || 'unknown'
-      });
+        tokensToAdd,
+        amountPaid,
+        currentUser?.username || 'unknown',
+        auth.currentUser?.uid || 'local',
+        currentUser?.role || 'staff'
+      );
 
       addToast(`Successfully sold ${tokensToAdd} tokens to ${studentCard.name}!`, 'success');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to sell tokens:", error);
-      addToast('Failed to complete token sale.', 'error');
+      addToast(error.message || 'Failed to complete token sale.', 'error');
       return false;
     }
   };
@@ -885,12 +1118,81 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
     try {
+      const staffBefore = staffList.find(s => s.id === staffId);
       await db.updateStaffAccount(staffId, { monthlyTokenLimit: limit });
+
+      await db.addAuditLog({
+        action: 'monthlyLimitChanged',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: 'owner',
+        targetId: staffId,
+        outletId: settings.outletId || 'main_outlet',
+        before: { monthlyTokenLimit: staffBefore?.monthlyTokenLimit },
+        after: { monthlyTokenLimit: limit }
+      });
+
       addToast('Staff monthly token limit updated successfully!', 'success');
       return true;
     } catch (err) {
       console.error("Failed to update staff limit:", err);
       addToast('Failed to update staff limit.', 'error');
+      return false;
+    }
+  };
+
+  const adjustTokens = async (studentId: string, targetTokens: number, reason: string): Promise<boolean> => {
+    if (currentUser?.role !== 'owner') {
+      addToast('Permission denied: only the owner can adjust balances manually.', 'error');
+      return false;
+    }
+    try {
+      const studentCard = tokens.find(t => t.id === studentId);
+      if (!studentCard) {
+        addToast('Student card not found.', 'error');
+        return false;
+      }
+
+      await db.adjustTokensTransaction(
+        studentId,
+        targetTokens,
+        reason,
+        auth.currentUser?.uid || 'local',
+        'owner'
+      );
+      addToast('Token balance adjusted successfully!', 'success');
+      return true;
+    } catch (err: any) {
+      console.error("Failed to adjust tokens:", err);
+      addToast(err.message || 'Failed to adjust tokens.', 'error');
+      return false;
+    }
+  };
+
+  const updateSettings = async (updatedFields: Partial<Settings>): Promise<boolean> => {
+    if (currentUser?.role !== 'owner') {
+      addToast('Permission denied: only the owner can update settings.', 'error');
+      return false;
+    }
+    try {
+      const originalSettings = { ...settings };
+      await db.updateSettings(updatedFields);
+
+      // Audit Log settings update
+      await db.addAuditLog({
+        action: 'settingsUpdated',
+        actorUid: auth.currentUser?.uid || 'local',
+        actorRole: 'owner',
+        targetId: 'settings_default',
+        outletId: settings.outletId || 'main_outlet',
+        before: originalSettings,
+        after: { ...originalSettings, ...updatedFields }
+      });
+
+      addToast('Settings updated successfully!', 'success');
+      return true;
+    } catch (err: any) {
+      console.error("Failed to update settings:", err);
+      addToast(err.message || 'Failed to update settings.', 'error');
       return false;
     }
   };
@@ -903,6 +1205,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         staffList,
         tokens,
         tokenTransactions,
+        settings,
+        auditLogs,
         currentUser,
         activeTable,
         tableCarts,
@@ -929,6 +1233,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateToken,
         removeToken,
         sellTokens,
+        adjustTokens,
+        updateSettings,
         addToast,
         removeToast,
         confirmAction

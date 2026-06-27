@@ -18,6 +18,7 @@ export interface MenuItem {
   description?: string;
   prepTime?: string;
   tags?: ('spicy' | 'veg' | 'popular' | 'new')[];
+  outletId?: string;
 }
 
 export interface CartItem {
@@ -47,6 +48,7 @@ export interface Order {
   tokenCardNo?: string;
   studentName?: string;
   tokensDeducted?: number;
+  outletId?: string;
 }
 
 export interface StaffAccount {
@@ -64,6 +66,7 @@ export interface StaffAccount {
   status: 'active' | 'inactive';
   role?: 'staff' | 'owner';
   monthlyTokenLimit?: number;
+  outletId?: string;
 }
 
 export interface TokenAccount {
@@ -86,6 +89,7 @@ export interface TokenAccount {
   createdAt: string;
   /** Timestamp of the last balance update, set on every recharge or deduction. */
   updatedAt?: string;
+  outletId?: string;
 }
 
 /**
@@ -98,7 +102,7 @@ export interface TokenAccount {
  *   - `adjustment`: positive or negative (owner manual correction)
  *
  * Use the `type` field, not the sign of `tokens`, to determine the direction of the change.
- * This makes the ledger easier to query and audit.
+ * This makes the ledger easy to query and audit.
  */
 export interface TokenTransaction {
   id: string;
@@ -122,4 +126,46 @@ export interface TokenTransaction {
   /** Related order ID for deduction/refund transactions. */
   orderId?: string;
   createdAt: string;
+  outletId?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  action:
+    | 'staffCreated'
+    | 'staffDeactivated'
+    | 'staffRemoved'
+    | 'orderCreated'
+    | 'orderCompleted'
+    | 'orderCancelled'
+    | 'menuItemCreated'
+    | 'menuItemUpdated'
+    | 'menuItemDeleted'
+    | 'tokenRecharged'
+    | 'tokenDeducted'
+    | 'tokenRefunded'
+    | 'tokenAdjusted'
+    | 'monthlyLimitChanged'
+    | 'settingsUpdated';
+  actorUid: string;
+  actorRole: 'staff' | 'owner' | 'system';
+  targetId: string;
+  outletId?: string;
+  timestamp: string;
+  before?: Record<string, any> | null;
+  after?: Record<string, any> | null;
+}
+
+export interface Settings {
+  id: string;
+  outletId: string;
+  outletName: string;
+  tokenValueInRupees: number;
+  manualUpiEnabled: boolean;
+  taxEnabled: boolean;
+  currency: string;
+  receiptFooter: string;
+  monthlyTokenLimitDefaults: number;
+  orderStatusFlow: string[];
+  updatedAt?: string;
 }
