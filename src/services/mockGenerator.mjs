@@ -548,11 +548,22 @@ export function generateMockData(now = new Date()) {
     }
   ];
 
+  // Map and append isDemo: true to all seeded collections
+  const demoStaffUsernames = ['owner-demo', 'staff-demo'];
+  const markedStaff = staff.map(s => ({
+    ...s,
+    isDemo: demoStaffUsernames.includes(s.username)
+  }));
+  const markedTokens = tokens.map(t => ({ ...t, isDemo: true }));
+  const markedOrders = orders.map(o => ({ ...o, isDemo: true }));
+  const markedTransactions = tokenTransactions.map(tx => ({ ...tx, isDemo: true }));
+  const markedAuditLogs = auditLogs.map(log => ({ ...log, isDemo: true }));
+
   return {
-    staff,
-    tokens,
-    orders,
-    tokenTransactions,
-    auditLogs
+    staff: markedStaff,
+    tokens: markedTokens,
+    orders: markedOrders,
+    tokenTransactions: markedTransactions,
+    auditLogs: markedAuditLogs
   };
 }

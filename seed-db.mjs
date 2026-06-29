@@ -223,7 +223,8 @@ async function seed() {
         username: member.username,
         role: member.role,
         status: member.status,
-        outletId: member.outletId
+        outletId: member.outletId,
+        isDemo: member.isDemo
       };
       if (member.monthlyTokenLimit !== undefined) {
         profile.monthlyTokenLimit = member.monthlyTokenLimit;

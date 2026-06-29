@@ -51,6 +51,7 @@ export interface Order {
   creditApplied?: number;
   creditReturned?: number;
   outletId?: string;
+  isDemo?: boolean;
 }
 
 export interface StaffAccount {
@@ -69,6 +70,7 @@ export interface StaffAccount {
   role?: 'staff' | 'owner';
   monthlyTokenLimit?: number;
   outletId?: string;
+  isDemo?: boolean;
 }
 
 export interface TokenAccount {
@@ -94,6 +96,7 @@ export interface TokenAccount {
   /** Timestamp of the last balance update, set on every recharge or deduction. */
   updatedAt?: string;
   outletId?: string;
+  isDemo?: boolean;
 }
 
 /**
@@ -131,6 +134,7 @@ export interface TokenTransaction {
   orderId?: string;
   createdAt: string;
   outletId?: string;
+  isDemo?: boolean;
 }
 
 export interface AuditLog {
@@ -158,6 +162,7 @@ export interface AuditLog {
   timestamp: string;
   before?: Record<string, any> | null;
   after?: Record<string, any> | null;
+  isDemo?: boolean;
 }
 
 export interface Settings {

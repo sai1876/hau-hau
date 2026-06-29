@@ -243,22 +243,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Subscribe to Orders
     const unsubOrders = db.subscribeOrders((updatedOrders) => {
-      setOrders(updatedOrders);
+      const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
+      const filtered = isDemoUser 
+        ? updatedOrders 
+        : updatedOrders.filter(o => !o.isDemo);
+      setOrders(filtered);
     });
 
     // Subscribe to Staff Accounts
     const unsubStaff = db.subscribeStaff((updatedStaff) => {
-      setStaffList(updatedStaff);
+      const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
+      const filtered = isDemoUser 
+        ? updatedStaff 
+        : updatedStaff.filter(s => !s.isDemo && s.username !== 'owner-demo' && s.username !== 'staff-demo');
+      setStaffList(filtered);
     });
 
     // Subscribe to Token Accounts
     const unsubTokens = db.subscribeTokens((updatedTokens) => {
-      setTokens(updatedTokens);
+      const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
+      const filtered = isDemoUser 
+        ? updatedTokens 
+        : updatedTokens.filter(t => !t.isDemo);
+      setTokens(filtered);
     });
 
     // Subscribe to Token Transactions
     const unsubTransactions = db.subscribeTokenTransactions((updatedTxs) => {
-      setTokenTransactions(updatedTxs);
+      const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
+      const filtered = isDemoUser 
+        ? updatedTxs 
+        : updatedTxs.filter(tx => !tx.isDemo);
+      setTokenTransactions(filtered);
     });
 
     // Subscribe to Settings
@@ -270,7 +286,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let unsubAuditLogs = () => {};
     if (!usingFirebase || currentUser?.role === 'owner') {
       unsubAuditLogs = db.subscribeAuditLogs((updatedLogs) => {
-        setAuditLogs(updatedLogs);
+        const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
+        const filtered = isDemoUser 
+          ? updatedLogs 
+          : updatedLogs.filter(log => !log.isDemo);
+        setAuditLogs(filtered);
       });
     }
 
