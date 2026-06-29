@@ -193,6 +193,14 @@ export default function StaffDashboardPage() {
   return (
     <div className="flex-1 flex flex-col bg-background h-screen overflow-hidden pb-16 md:pb-0">
       
+      {/* Demo Banner */}
+      {(currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo') && (
+        <div className="bg-gradient-to-r from-red-700 via-rose-600 to-red-700 text-white text-center py-2 px-4 text-[10px] sm:text-xs font-bold tracking-wider uppercase border-b border-red-800 shadow-md relative z-50 flex items-center justify-center gap-2 shrink-0 select-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />
+          <span>This is a demo fake page. Access to original accounts cannot be provided for college verification.</span>
+        </div>
+      )}
+
       {/* Header Bar */}
       <header className="bg-surface-header/90 backdrop-blur-md border-b border-border shrink-0 px-4 py-2.5 md:px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

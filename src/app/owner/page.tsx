@@ -513,7 +513,16 @@ export default function OwnerDashboardPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row bg-background min-h-screen">
+    <div className="flex-1 flex flex-col bg-background min-h-screen">
+      {/* Demo Banner */}
+      {(currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo') && (
+        <div className="bg-gradient-to-r from-red-700 via-rose-600 to-red-700 text-white text-center py-2 px-4 text-[10px] sm:text-xs font-bold tracking-wider uppercase border-b border-red-800 shadow-md relative z-50 flex items-center justify-center gap-2 shrink-0 select-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />
+          <span>This is a demo fake page. Access to original accounts cannot be provided for college verification.</span>
+        </div>
+      )}
+      
+      <div className="flex-1 flex flex-col md:flex-row">
       
       {/* Mobile Top Header */}
       <header className="md:hidden bg-surface-header/90 backdrop-blur-md border-b border-border px-4 py-2.5 flex items-center justify-between shrink-0">
@@ -2231,6 +2240,7 @@ export default function OwnerDashboardPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
