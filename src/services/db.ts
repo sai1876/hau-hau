@@ -62,6 +62,20 @@ const isConnectivityError = (error: unknown): boolean => {
   return code !== 'permission-denied' && code !== 'unauthenticated';
 };
 
+const isCurrentSessionDemo = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const savedUser = localStorage.getItem('hau_hau_session');
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      return !!user.username?.toLowerCase().includes('demo');
+    }
+  } catch (e) {
+    console.warn('Error reading session for demo check:', e);
+  }
+  return false;
+};
+
 const DEFAULT_MENU: MenuItem[] = [
   { 
     id: 'm1', 
@@ -278,6 +292,32 @@ export const db = {
     if (!localStorage.getItem(SETTINGS_KEY)) {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
     }
+
+    // Migrate existing LocalStorage items to have isDemo: true if they don't have it set
+    const collectionsToMigrate = [ORDERS_KEY, TOKENS_KEY, TRANSACTIONS_KEY, AUDIT_LOGS_KEY];
+    collectionsToMigrate.forEach(key => {
+      const dataStr = localStorage.getItem(key);
+      if (dataStr) {
+        try {
+          const list = JSON.parse(dataStr);
+          if (Array.isArray(list)) {
+            let updated = false;
+            const migratedList = list.map(item => {
+              if (item && item.isDemo === undefined) {
+                updated = true;
+                return { ...item, isDemo: true };
+              }
+              return item;
+            });
+            if (updated) {
+              localStorage.setItem(key, JSON.stringify(migratedList));
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to migrate LocalStorage key ${key}:`, e);
+        }
+      }
+    });
   },
 
   // --- LocalStorage Subscriptions Helpers ---
@@ -787,12 +827,14 @@ export const db = {
 
   // --- Orders Write Operations ---
   async createOrder(orderData: Omit<Order, 'id' | 'createdAt' | 'orderStatus' | 'paymentStatus'> & { id?: string }): Promise<Order> {
+    const isDemo = orderData.isDemo !== undefined ? orderData.isDemo : isCurrentSessionDemo();
     const newOrder: Order = {
       ...orderData,
       id: orderData.id || 'HH-' + Math.floor(1000 + Math.random() * 9000),
       orderStatus: 'pending',
       paymentStatus: orderData.paymentMode === 'tokens' ? 'paid' : 'pending',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isDemo
     };
 
     let useLocal = !isFirebaseConfigured();
@@ -859,11 +901,13 @@ export const db = {
 
   // --- Tokens Write Operations ---
   async addTokenAccount(account: Omit<TokenAccount, 'id' | 'createdAt'>): Promise<TokenAccount> {
+    const isDemo = account.isDemo !== undefined ? account.isDemo : isCurrentSessionDemo();
     const newAccount: TokenAccount = {
       ...account,
       id: 't_' + Math.random().toString(36).substr(2, 9),
       balanceRupees: 0,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isDemo
     };
 
     let useLocal = !isFirebaseConfigured();
@@ -1042,11 +1086,13 @@ export const db = {
   },
 
   async addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<AuditLog> {
+    const isDemo = log.isDemo !== undefined ? log.isDemo : isCurrentSessionDemo();
     const newLog: AuditLog = {
       ...log,
       id: 'log_' + Math.random().toString(36).substr(2, 9),
       timestamp: new Date().toISOString(),
-      outletId: log.outletId || DEFAULT_OUTLET_ID
+      outletId: log.outletId || DEFAULT_OUTLET_ID,
+      isDemo
     };
     let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
@@ -1097,6 +1143,7 @@ export const db = {
           updatedAt: new Date().toISOString()
         });
         
+        const isDemo = isCurrentSessionDemo();
         const txRecord: TokenTransaction = {
           id: txRef.id,
           type: 'recharge',
@@ -1107,7 +1154,8 @@ export const db = {
           amount: amountPaid,
           soldBy,
           createdAt: new Date().toISOString(),
-          outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+          isDemo
         };
         transaction.set(txRef, txRecord);
         
@@ -1120,7 +1168,8 @@ export const db = {
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
           timestamp: new Date().toISOString(),
           before: { tokens: currentCard.tokens, balanceRupees: currentCard.balanceRupees || 0 },
-          after: { tokens: newBalance, balanceRupees: currentCard.balanceRupees || 0 }
+          after: { tokens: newBalance, balanceRupees: currentCard.balanceRupees || 0 },
+          isDemo
         };
         transaction.set(auditRef, auditLog);
       });
@@ -1144,6 +1193,7 @@ export const db = {
       };
       localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
       
+      const isDemo = isCurrentSessionDemo();
       const txRecord: TokenTransaction = {
         id: 'tx_' + Math.random().toString(36).substr(2, 9),
         type: 'recharge',
@@ -1154,7 +1204,8 @@ export const db = {
         amount: amountPaid,
         soldBy,
         createdAt: new Date().toISOString(),
-        outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+        outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+        isDemo
       };
       const txs = localStorage.getItem(TRANSACTIONS_KEY);
       const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];
@@ -1214,6 +1265,7 @@ export const db = {
           updatedAt: new Date().toISOString()
         });
         
+        const isDemo = isCurrentSessionDemo();
         const txRecord: TokenTransaction = {
           id: txRef.id,
           type: 'deduction',
@@ -1225,7 +1277,8 @@ export const db = {
           soldBy,
           orderId,
           createdAt: new Date().toISOString(),
-          outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+          isDemo
         };
         transaction.set(txRef, txRecord);
         
@@ -1238,7 +1291,8 @@ export const db = {
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
           timestamp: new Date().toISOString(),
           before: { tokens: currentCard.tokens, balanceRupees, orderId },
-          after: { tokens: newTokensBalance, balanceRupees: newBalanceRupees, orderId }
+          after: { tokens: newTokensBalance, balanceRupees: newBalanceRupees, orderId },
+          isDemo
         };
         transaction.set(auditRef, auditLog);
 
@@ -1280,6 +1334,7 @@ export const db = {
       };
       localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
       
+      const isDemo = isCurrentSessionDemo();
       const txRecord: TokenTransaction = {
         id: 'tx_' + Math.random().toString(36).substr(2, 9),
         type: 'deduction',
@@ -1291,7 +1346,8 @@ export const db = {
         soldBy,
         orderId,
         createdAt: new Date().toISOString(),
-        outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+        outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+        isDemo
       };
       const txs = localStorage.getItem(TRANSACTIONS_KEY);
       const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];
@@ -1351,6 +1407,7 @@ export const db = {
           updatedAt: new Date().toISOString()
         });
         
+        const isDemo = isCurrentSessionDemo();
         const txRecord: TokenTransaction = {
           id: txRef.id,
           type: 'refund',
@@ -1362,7 +1419,8 @@ export const db = {
           soldBy: actorRole === 'owner' ? 'owner' : 'staff',
           orderId,
           createdAt: new Date().toISOString(),
-          outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+          isDemo
         };
         transaction.set(txRef, txRecord);
         
@@ -1375,7 +1433,8 @@ export const db = {
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
           timestamp: new Date().toISOString(),
           before: { tokens: currentCard.tokens, balanceRupees: currentBalanceRupees, orderId },
-          after: { tokens: newBalance, balanceRupees: newBalanceRupees, orderId }
+          after: { tokens: newBalance, balanceRupees: newBalanceRupees, orderId },
+          isDemo
         };
         transaction.set(auditRef, auditLog);
       });
@@ -1402,6 +1461,7 @@ export const db = {
       };
       localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
       
+      const isDemo = isCurrentSessionDemo();
       const txRecord: TokenTransaction = {
         id: 'tx_' + Math.random().toString(36).substr(2, 9),
         type: 'refund',
@@ -1413,7 +1473,8 @@ export const db = {
         soldBy: actorRole === 'owner' ? 'owner' : 'staff',
         orderId,
         createdAt: new Date().toISOString(),
-        outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+        outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+        isDemo
       };
       const txs = localStorage.getItem(TRANSACTIONS_KEY);
       const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];
@@ -1465,6 +1526,7 @@ export const db = {
           updatedAt: new Date().toISOString()
         });
         
+        const isDemo = isCurrentSessionDemo();
         const txRecord: TokenTransaction = {
           id: txRef.id,
           type: 'adjustment',
@@ -1475,7 +1537,8 @@ export const db = {
           amount: (delta * rate) + deltaRupees,
           soldBy: 'owner',
           createdAt: new Date().toISOString(),
-          outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+          outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+          isDemo
         };
         transaction.set(txRef, txRecord);
         
@@ -1488,7 +1551,8 @@ export const db = {
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
           timestamp: new Date().toISOString(),
           before: { tokens: currentCard.tokens, balanceRupees: currentBalanceRupees, reason },
-          after: { tokens: targetTokens, balanceRupees: targetBalanceRupees, reason }
+          after: { tokens: targetTokens, balanceRupees: targetBalanceRupees, reason },
+          isDemo
         };
         transaction.set(auditRef, auditLog);
       });
@@ -1515,6 +1579,7 @@ export const db = {
       const settingsRaw = localStorage.getItem('hau_hau_settings');
       const rate = settingsRaw ? (JSON.parse(settingsRaw).tokenValueInRupees || 30) : 30;
       
+      const isDemo = isCurrentSessionDemo();
       const txRecord: TokenTransaction = {
         id: 'tx_' + Math.random().toString(36).substr(2, 9),
         type: 'adjustment',
@@ -1525,7 +1590,8 @@ export const db = {
         amount: (delta * rate) + deltaRupees,
         soldBy: 'owner',
         createdAt: new Date().toISOString(),
-        outletId: currentCard.outletId || DEFAULT_OUTLET_ID
+        outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
+        isDemo
       };
       const txs = localStorage.getItem(TRANSACTIONS_KEY);
       const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];
