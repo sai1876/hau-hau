@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { TokenAccount } from '../types';
 import { TokenIcon } from './TokenIcon';
+import { InfoTag } from './InfoTag';
 
 interface TokenAccountFormProps {
   editingToken: TokenAccount | null;
@@ -32,10 +33,11 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
   }
 
   const handleTokensChange = (val: string) => {
-    setTokensInput(val);
-    const parsed = parseFloat(val);
+    const cleanVal = val.replace(/\D/g, '');
+    setTokensInput(cleanVal);
+    const parsed = parseInt(cleanVal, 10);
     if (!isNaN(parsed) && parsed >= 0) {
-      const rupees = Math.round(parsed * tokenValue * 100) / 100;
+      const rupees = parsed * tokenValue;
       setRupeesInput(rupees.toString());
     } else {
       setRupeesInput('');
@@ -46,7 +48,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
     setRupeesInput(val);
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed >= 0) {
-      const tokens = Math.round((parsed / tokenValue) * 100) / 100;
+      const tokens = Math.floor(parsed / tokenValue);
       setTokensInput(tokens.toString());
     } else {
       setTokensInput('');
@@ -64,7 +66,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
       return;
     }
 
-    const numericTokens = parseFloat(tokensInput);
+    const numericTokens = parseInt(tokensInput, 10);
     if (isNaN(numericTokens) || numericTokens < 0) {
       alert('Please enter a valid positive token count.');
       return;
@@ -74,7 +76,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
       const success = await updateToken(editingToken.id, {
         name: name.trim(),
         cardNo: cardNo.trim(),
-        tokens: Math.round(numericTokens * 100) / 100
+        tokens: Math.round(numericTokens)
       });
       if (success) {
         onCancelEdit();
@@ -83,7 +85,7 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
       const success = await createNewToken({
         name: name.trim(),
         cardNo: cardNo.trim(),
-        tokens: Math.round(numericTokens * 100) / 100
+        tokens: Math.round(numericTokens)
       });
       if (success) {
         setName('');
@@ -132,14 +134,19 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
           {/* Tokens & value display */}
           <div className="flex flex-col mt-1.5 relative z-10">
             <span className="text-[8px] uppercase tracking-wider text-white/50 font-bold">Balance</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-xl font-mono font-bold text-blue-300">
-                {parseFloat(tokensInput) ? parseFloat(tokensInput).toFixed(2) : '0.00'} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-300" />
+            <div className="flex items-baseline justify-between w-full">
+              <span className="text-xl font-mono font-bold text-blue-300 flex items-center">
+                {parseInt(tokensInput, 10) || 0} <TokenIcon className="ml-1 w-4 h-4 text-blue-300" />
               </span>
-              <span className="text-[10px] font-mono text-[#71d384] font-bold">
-                ≈ ₹{parseFloat(rupeesInput) ? parseFloat(rupeesInput).toFixed(2) : '0.00'}
-              </span>
+              {editingToken && (editingToken.balanceRupees ?? 0) > 0 && (
+                <span className="text-[9px] font-mono text-[#71d384] font-bold">
+                  Credit: ₹{editingToken.balanceRupees?.toFixed(2)}
+                </span>
+              )}
             </div>
+            <span className="text-[9px] font-mono text-white/50 mt-0.5">
+              Rupee equivalent: ₹{(parseInt(tokensInput, 10) || 0) * tokenValue}
+            </span>
           </div>
 
           {/* Cardholder details */}
@@ -179,8 +186,9 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
 
         {/* Card Number */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-text-muted font-bold">
+          <label className="text-xs text-text-muted font-bold flex items-center">
             Card Number (3–8 Digits)
+            <InfoTag text="Unique identifier mapping to the student's physical NFC card (numeric, 3 to 8 digits long)." position="top" />
           </label>
           <input
             type="text"
@@ -205,8 +213,9 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
         <div className="grid grid-cols-2 gap-3">
           {/* Tokens Input */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-text-muted font-bold">
+            <label className="text-xs text-text-muted font-bold flex items-center">
               Tokens
+              <InfoTag text="Balance loaded onto the card in whole units. Recharges cannot be fractional." position="bottom-left" />
             </label>
             <div className="relative flex items-center">
               <input
@@ -227,8 +236,9 @@ export function TokenAccountForm({ editingToken, onCancelEdit }: TokenAccountFor
 
           {/* Rupees Input */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-text-muted font-bold">
+            <label className="text-xs text-text-muted font-bold flex items-center">
               Amount (₹)
+              <InfoTag text="Equivalent value in Rupees based on the conversion rate. Adjusting this will compute the corresponding number of whole tokens." position="bottom-right" />
             </label>
             <div className="relative flex items-center">
               <span className="absolute left-3 text-xs text-text-muted font-bold pointer-events-none">

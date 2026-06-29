@@ -9,28 +9,41 @@ function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex');
 }
 
-function readEnvLocal() {
-  const envPath = path.resolve(process.cwd(), '.env.local');
-  if (!fs.existsSync(envPath)) {
-    console.error('.env.local file not found!');
-    process.exit(1);
+function readEnv() {
+  const config = { ...process.env };
+  
+  const envProductionPath = path.resolve(process.cwd(), '.env.production');
+  const envLocalPath = path.resolve(process.cwd(), '.env.local');
+  
+  let envPath = null;
+  if (fs.existsSync(envProductionPath)) {
+    envPath = envProductionPath;
+  } else if (fs.existsSync(envLocalPath)) {
+    envPath = envLocalPath;
   }
-  const content = fs.readFileSync(envPath, 'utf8');
-  const config = {};
-  content.split('\n').forEach(line => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) return;
-    const parts = trimmed.split('=');
-    if (parts.length >= 2) {
-      const key = parts[0].trim();
-      const val = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
-      config[key] = val;
-    }
-  });
+  
+  if (envPath) {
+    console.log(`Loading env variables from: ${path.basename(envPath)}`);
+    const content = fs.readFileSync(envPath, 'utf8');
+    content.split(/\r?\n/).forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const parts = trimmed.split('=');
+      if (parts.length >= 2) {
+        const key = parts[0].trim();
+        const val = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
+        if (config[key] === undefined) {
+          config[key] = val;
+        }
+      }
+    });
+  } else {
+    console.warn('No .env.local or .env.production found. Using existing process.env variables.');
+  }
   return config;
 }
 
-const env = readEnvLocal();
+const env = readEnv();
 
 const firebaseConfig = {
   apiKey: env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -67,41 +80,59 @@ async function seed() {
   try {
     console.log('Starting Firebase DB & Auth seeding...');
 
+    // Read production values with safe defaults
+    const ownerEmail = env.PRODUCTION_OWNER_EMAIL || 'cherukuridakshithsai@gmail.com';
+    const ownerPassword = env.PRODUCTION_OWNER_PASSWORD || 'owner123';
+    const staffEmail = env.PRODUCTION_STAFF_EMAIL || 'staff@hauhau.com';
+    const staffPassword = env.PRODUCTION_STAFF_PASSWORD || 'staff123';
+    
+    // Automatically treat as production if it uses a custom email or if NODE_ENV/PRODUCTION is set
+    const isProduction = env.NODE_ENV === 'production' || 
+                         process.argv.includes('--production') || 
+                         env.PRODUCTION === 'true' || 
+                         ownerEmail !== 'owner@hauhau.com';
+
+    if (isProduction) {
+      console.log('--- RUNNING IN PRODUCTION MODE ---');
+      console.log('Plaintext passwords will NOT be saved in Firestore.');
+    }
+
     // 1. Create Owner User
-    const ownerUid = await getOrCreateUser('owner@hauhau.com', 'owner123');
+    const ownerUid = await getOrCreateUser(ownerEmail, ownerPassword);
 
     // 2. Create Staff User
-    const staffUid = await getOrCreateUser('staff@hauhau.com', 'staff123');
+    const staffUid = await getOrCreateUser(staffEmail, staffPassword);
 
     // 3. Seed Owner Profile in Firestore
     console.log('Seeding Owner profile in Firestore...');
-    await setDoc(doc(firestore, 'staff', ownerUid), {
+    const ownerDoc = {
       id: ownerUid,
       name: 'Sarah (Owner)',
-      emailOrPhone: 'owner@hauhau.com',
+      emailOrPhone: ownerEmail,
       username: 'owner',
       role: 'owner',
       status: 'active',
-      // TODO (security): Remove the 'password' field before going live with real users.
-      // Firebase Authentication manages passwords — this field is only for the dev
-      // localStorage fallback and must NOT exist in production Firestore documents.
-      password: hashPassword('owner123') // Hashed DEV/DEMO ONLY
-    });
+    };
+    if (!isProduction) {
+      ownerDoc.password = hashPassword(ownerPassword);
+    }
+    await setDoc(doc(firestore, 'staff', ownerUid), ownerDoc);
 
     // 4. Seed Staff Profile in Firestore
     console.log('Seeding Staff profile in Firestore...');
-    await setDoc(doc(firestore, 'staff', staffUid), {
+    const staffDoc = {
       id: staffUid,
       name: 'Alex Johnson',
-      emailOrPhone: 'staff@hauhau.com',
+      emailOrPhone: staffEmail,
       username: 'staff',
       role: 'staff',
       status: 'active',
-      // TODO (security): Remove the 'password' field before going live with real users.
-      // See SECURITY.md for the recommended hardening steps.
-      password: hashPassword('staff123'), // Hashed DEV/DEMO ONLY
       monthlyTokenLimit: 1000
-    });
+    };
+    if (!isProduction) {
+      staffDoc.password = hashPassword(staffPassword);
+    }
+    await setDoc(doc(firestore, 'staff', staffUid), staffDoc);
 
     // 5. Seed Menu Items
     const DEFAULT_MENU = [
@@ -202,11 +233,14 @@ async function seed() {
     }
 
     console.log('Seeding complete! Owner and Staff accounts created in Auth and Firestore.');
-    console.log('Default login credentials:');
-    console.log('  Owner: owner@hauhau.com / owner123');
-    console.log('  Staff: staff@hauhau.com / staff123');
-    console.warn('⚠ SECURITY REMINDER: Change the default passwords before going live.');
-    console.warn('⚠ SECURITY REMINDER: Delete the password field from all Firestore staff documents before production.');
+    console.log('Login credentials configured:');
+    console.log(`  Owner: ${ownerEmail} / ${isProduction ? '(configured password)' : ownerPassword}`);
+    console.log(`  Staff: ${staffEmail} / ${isProduction ? '(configured password)' : staffPassword}`);
+    if (isProduction) {
+      console.log('Production mode detected: plain text passwords successfully excluded from Firestore documents.');
+    } else {
+      console.warn('⚠ SECURITY REMINDER: Delete the password field from all Firestore staff documents before going live.');
+    }
     console.warn('  See SECURITY.md for the full production hardening checklist.');
     process.exit(0);
   } catch (err) {

@@ -3,12 +3,15 @@ import { Order } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { X } from '@phosphor-icons/react';
 
+import { useApp } from '../context/AppContext';
+
 interface OrderDetailsModalProps {
   order: Order | null;
   onClose: () => void;
 }
 
 export function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
+  const { settings } = useApp();
   if (!order) return null;
 
   return (
@@ -56,7 +59,13 @@ export function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
                 <div className="mt-2.5 p-2.5 bg-blue-500/5 border border-blue-500/20 rounded-md text-[10px] text-blue-400 font-mono flex flex-col gap-1 leading-snug">
                   {order.studentName && <span>Student: <strong className="text-foreground font-semibold">{order.studentName}</strong></span>}
                   {order.tokenCardNo && <span>Card: <strong className="text-foreground font-semibold">#{order.tokenCardNo}</strong></span>}
-                  <span>Deducted: <strong className="text-foreground font-semibold">{order.tokensDeducted || Math.round((order.total / 30) * 100) / 100} tokens</strong></span>
+                  <span>Deducted: <strong className="text-foreground font-semibold">{order.tokensDeducted !== undefined ? order.tokensDeducted : Math.ceil(order.total / 30)} tokens</strong></span>
+                  {order.creditApplied !== undefined && order.creditApplied > 0 && (
+                    <span>Credit Used: <strong className="text-foreground font-semibold">₹{order.creditApplied.toFixed(2)}</strong></span>
+                  )}
+                  {order.creditReturned !== undefined && order.creditReturned > 0 && (
+                    <span>Credit Saved: <strong className="text-foreground font-semibold">₹{order.creditReturned.toFixed(2)}</strong></span>
+                  )}
                 </div>
               )}
             </div>
@@ -93,6 +102,11 @@ export function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
                 <span className="text-base text-primary font-bold font-mono">₹{order.total.toFixed(2)}</span>
               </div>
             </div>
+            {settings?.receiptFooter && (
+              <div className="text-center text-[10px] text-text-muted italic mt-2.5 leading-normal bg-surface-header/30 py-2 border border-dashed border-border rounded-lg px-3">
+                {settings.receiptFooter}
+              </div>
+            )}
           </div>
 
           {/* Timeline */}

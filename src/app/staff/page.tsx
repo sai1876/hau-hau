@@ -11,8 +11,10 @@ import ProfileSection from '@/components/ProfileSection';
 import TokenAccountForm from '@/components/TokenAccountForm';
 import { TokenAccount } from '@/types';
 import { TokenIcon } from '@/components/TokenIcon';
-import { ForkKnife, CreditCard, ClipboardText, MagnifyingGlass, GearSix } from '@phosphor-icons/react';
+import { ForkKnife, CreditCard, ClipboardText, MagnifyingGlass, GearSix, BookOpen } from '@phosphor-icons/react';
 import { Pagination } from '@/components/Pagination';
+import { InfoTag } from '@/components/InfoTag';
+import { DocsWorkspace } from '@/components/DocsWorkspace';
 
 export default function StaffDashboardPage() {
   const router = useRouter();
@@ -26,10 +28,13 @@ export default function StaffDashboardPage() {
     tokens,
     tokenTransactions,
     staffList,
-    sellTokens
+    sellTokens,
+    settings
   } = useApp();
 
-  const [activeWorkspace, setActiveWorkspace] = useState<'pos' | 'tokens' | 'history' | 'profile'>('pos');
+  const tokenValue = settings?.tokenValueInRupees || 30;
+
+  const [activeWorkspace, setActiveWorkspace] = useState<'pos' | 'tokens' | 'history' | 'profile' | 'docs'>('pos');
   const [isIssuingNewCard, setIsIssuingNewCard] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
@@ -116,10 +121,11 @@ export default function StaffDashboardPage() {
     : [];
 
   const handleRechargeTokensChange = (val: string) => {
-    setRechargeTokens(val);
-    const parsed = parseFloat(val);
+    const cleanVal = val.replace(/\D/g, '');
+    setRechargeTokens(cleanVal);
+    const parsed = parseInt(cleanVal, 10);
     if (!isNaN(parsed) && parsed >= 0) {
-      const rupees = Math.round(parsed * 30 * 100) / 100;
+      const rupees = parsed * tokenValue;
       setRechargeAmount(rupees.toString());
     } else {
       setRechargeAmount('');
@@ -130,7 +136,7 @@ export default function StaffDashboardPage() {
     setRechargeAmount(val);
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed >= 0) {
-      const tokensVal = Math.round((parsed / 30) * 100) / 100;
+      const tokensVal = Math.floor(parsed / tokenValue);
       setRechargeTokens(tokensVal.toString());
     } else {
       setRechargeTokens('');
@@ -141,7 +147,7 @@ export default function StaffDashboardPage() {
     e.preventDefault();
     if (!selectedStudent || !rechargeTokens || !rechargeAmount) return;
 
-    const tkVal = parseFloat(rechargeTokens);
+    const tkVal = parseInt(rechargeTokens, 10);
     const amtVal = parseFloat(rechargeAmount);
 
     if (isNaN(tkVal) || tkVal <= 0 || isNaN(amtVal) || amtVal <= 0) {
@@ -154,7 +160,7 @@ export default function StaffDashboardPage() {
       // Refresh the selected student object locally to show updated balance
       setSelectedStudent({
         ...selectedStudent,
-        tokens: Math.round((selectedStudent.tokens + tkVal) * 100) / 100
+        tokens: Math.round(selectedStudent.tokens + tkVal)
       });
       setRechargeTokens('');
       setRechargeAmount('');
@@ -227,13 +233,13 @@ export default function StaffDashboardPage() {
         
         {/* Workspace Nav Tabs */}
         <div className="flex border-b border-border shrink-0">
-          {(['pos', 'tokens', 'history'] as const).map((space) => {
+          {(['pos', 'tokens', 'history', 'docs'] as const).map((space) => {
             const isSelected = activeWorkspace === space;
             return (
               <button
                 key={space}
                 onClick={() => {
-                  setActiveWorkspace(space);
+                  setActiveWorkspace(space as any);
                   // Reset states on toggle
                   setSelectedStudent(null);
                   setStudentSearchQuery('');
@@ -248,6 +254,7 @@ export default function StaffDashboardPage() {
                 {space === 'pos' && <><ForkKnife size={16} weight="duotone" /><span>Order</span></>}
                 {space === 'tokens' && <><CreditCard size={16} weight="duotone" /><span>Cards</span></>}
                 {space === 'history' && <><ClipboardText size={16} weight="duotone" /><span>History</span></>}
+                {space === 'docs' && <><BookOpen size={16} weight="duotone" /><span>Help & Docs</span></>}
               </button>
             );
           })}
@@ -326,7 +333,10 @@ export default function StaffDashboardPage() {
                   <div className="absolute -right-10 -top-10 w-28 h-28 bg-primary/5 rounded-full blur-xl pointer-events-none" />
                   <div className="flex items-start justify-between mb-4 relative z-10">
                     <div>
-                      <span className="text-xs text-foreground font-bold block">Monthly Token Quota</span>
+                      <span className="text-xs text-foreground font-bold flex items-center">
+                        Monthly Token Quota
+                        <InfoTag text="Maximum number of tokens you can sell or issue to cards in the current calendar month. Set by the owner." position="top" />
+                      </span>
                       <span className="text-xs text-text-muted mt-0.5 block">Token sales quota for {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
                     </div>
                     <div className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${
@@ -372,8 +382,9 @@ export default function StaffDashboardPage() {
 
                 {/* Search Card Panel (Autocomplete) */}
                 <div className="minimal-card p-5 rounded-xl flex flex-col gap-4 bg-surface border border-border relative z-30">
-                  <h3 className="text-xs text-foreground font-bold">
+                  <h3 className="text-xs text-foreground font-bold flex items-center">
                     Search Card
+                    <InfoTag text="Search student passes by name or Card ID to recharge their tokens or view card history." position="top" />
                   </h3>
                   <div className="relative">
                     <input
@@ -407,9 +418,16 @@ export default function StaffDashboardPage() {
                                 #{student.cardNo}
                               </span>
                             </div>
-                            <span className="bg-blue-500/10 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-bold text-[10px] font-mono">
-                              {student.tokens.toFixed(2)} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-400" />
-                            </span>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="bg-blue-500/10 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-bold text-[10px] font-mono flex items-center">
+                                {student.tokens} <TokenIcon className="ml-1 w-3 h-3 text-blue-400" />
+                              </span>
+                              {student.balanceRupees ? (
+                                <span className="text-[9px] font-mono text-success font-bold">
+                                  +₹{student.balanceRupees.toFixed(2)} credit
+                                </span>
+                              ) : null}
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -444,17 +462,23 @@ export default function StaffDashboardPage() {
 
                     <div className="p-5 flex flex-col gap-6">
                       {/* Current Balance */}
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-3">
                         <div className="bg-surface-container/40 border border-border p-4 rounded-lg flex flex-col justify-center">
-                          <span className="text-[9px] text-text-muted font-bold">Current Balance</span>
+                          <span className="text-[9px] text-text-muted font-bold">Tokens Balance</span>
                           <span className="text-lg font-bold text-primary font-mono mt-1">
                             {selectedStudent.tokens} tokens
                           </span>
                         </div>
                         <div className="bg-surface-container/40 border border-border p-4 rounded-lg flex flex-col justify-center">
-                          <span className="text-[9px] text-text-muted font-bold">Equivalent Value</span>
+                          <span className="text-[9px] text-text-muted font-bold">Store Credit</span>
+                          <span className="text-lg font-bold text-success font-mono mt-1">
+                            ₹{(selectedStudent.balanceRupees || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="bg-surface-container/40 border border-border p-4 rounded-lg flex flex-col justify-center col-span-3 sm:col-span-1">
+                          <span className="text-[9px] text-text-muted font-bold">Total Card Value</span>
                           <span className="text-lg font-bold text-[#71d384] font-mono mt-1">
-                            ₹{(selectedStudent.tokens * 30).toFixed(2)}
+                            ₹{((selectedStudent.tokens * tokenValue) + (selectedStudent.balanceRupees || 0)).toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -626,17 +650,18 @@ export default function StaffDashboardPage() {
                 )}
 
                 {/* Shift Token Sales Summary */}
-                <div className="minimal-card rounded-xl overflow-hidden flex flex-col bg-surface border border-border">
-                  <div className="bg-surface-header/80 px-4 py-3 border-b border-border">
-                    <h3 className="text-xs font-bold text-foreground">
+                <div className="minimal-card rounded-xl flex flex-col bg-surface border border-border">
+                  <div className="bg-surface-header/80 px-4 py-3 border-b border-border rounded-t-xl">
+                    <h3 className="text-xs font-bold text-foreground flex items-center">
                       Your Shift Token Sales
+                      <InfoTag text="Summary of token sales and cash collected by you today. Resets daily." position="bottom" />
                     </h3>
                   </div>
                   <div className="p-5 flex flex-col gap-4">
                     <div className="bg-surface-container/40 border border-border p-3.5 rounded-lg flex justify-between items-center">
                       <span className="text-xs text-text-muted font-bold">Tokens Sold</span>
                       <span className="font-mono font-bold text-sm text-primary">
-                        {shiftTokensSold.toFixed(2)} tokens
+                        {shiftTokensSold} tokens
                       </span>
                     </div>
                     <div className="bg-surface-container/40 border border-border p-3.5 rounded-lg flex justify-between items-center">
@@ -750,6 +775,13 @@ export default function StaffDashboardPage() {
         {activeWorkspace === 'profile' && (
           <div className="flex-1 overflow-y-auto">
             <ProfileSection />
+          </div>
+        )}
+
+        {/* 5. HELP & DOCS WORKSPACE */}
+        {activeWorkspace === 'docs' && (
+          <div className="flex-1 overflow-y-auto">
+            <DocsWorkspace />
           </div>
         )}
       </main>

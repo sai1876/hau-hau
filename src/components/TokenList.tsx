@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { TokenAccount } from '../types';
 import { TokenIcon } from './TokenIcon';
+import { InfoTag } from './InfoTag';
 import { MagnifyingGlass } from '@phosphor-icons/react';
 import { Pagination } from './Pagination';
 
@@ -88,7 +89,18 @@ export function TokenList({ onStartEdit, onViewHistory }: TokenListProps) {
                 <tr className="border-b border-border bg-surface-header/40 text-text-muted">
                   <th className="p-3.5 pl-5 text-xs font-semibold">Card No</th>
                   <th className="p-3.5 text-xs font-semibold">Student Name</th>
-                  <th className="p-3.5 text-xs font-semibold">Token Balance</th>
+                  <th className="p-3.5 text-xs font-semibold">
+                    <span className="flex items-center gap-1">
+                      Token Balance
+                      <InfoTag text="Physical pass units loaded onto the card. Always represented as whole integers." position="bottom" />
+                    </span>
+                  </th>
+                  <th className="p-3.5 text-xs font-semibold">
+                    <span className="flex items-center">
+                      Store Credit
+                      <InfoTag text="Digital change in Rupees accumulated from overpaying in whole tokens. Applied automatically on the next checkout." position="bottom" />
+                    </span>
+                  </th>
                   <th className="p-3.5 text-xs font-semibold">Provision Date</th>
                   <th className="p-3.5 pr-5 text-xs font-semibold text-right">Actions</th>
                 </tr>
@@ -103,8 +115,13 @@ export function TokenList({ onStartEdit, onViewHistory }: TokenListProps) {
                     </td>
                     <td className="p-3.5 font-bold text-foreground">{token.name}</td>
                     <td className="p-3.5 text-foreground font-mono">
-                      <span className="bg-blue-500/10 text-blue-450 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-bold text-[10px]">
-                        {token.tokens.toFixed(2)} <TokenIcon className="ml-1 w-3.5 h-3.5 text-amber-550" />
+                      <span className="inline-flex items-center bg-blue-500/10 text-blue-450 px-2.5 py-0.5 rounded-full border border-blue-500/20 font-bold text-[10px] whitespace-nowrap">
+                        {token.tokens} <TokenIcon className="ml-1 w-3.5 h-3.5 text-amber-550 shrink-0" />
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-foreground font-mono">
+                      <span className="bg-success/10 text-success px-2.5 py-0.5 rounded-full border border-success/20 font-bold text-[10px]">
+                        ₹{(token.balanceRupees || 0).toFixed(2)}
                       </span>
                     </td>
                     <td className="p-3.5 text-text-muted font-mono">

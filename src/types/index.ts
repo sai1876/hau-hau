@@ -48,6 +48,8 @@ export interface Order {
   tokenCardNo?: string;
   studentName?: string;
   tokensDeducted?: number;
+  creditApplied?: number;
+  creditReturned?: number;
   outletId?: string;
 }
 
@@ -86,6 +88,8 @@ export interface TokenAccount {
    * TODO: Migrate balance updates to a Cloud Function for atomicity.
    */
   tokens: number;
+  /** Stores overpayment credit (change) in Rupees for physical token payments. */
+  balanceRupees?: number;
   createdAt: string;
   /** Timestamp of the last balance update, set on every recharge or deduction. */
   updatedAt?: string;

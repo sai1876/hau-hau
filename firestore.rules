@@ -36,20 +36,33 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data;
     }
 
-    // Returns true if the authenticated user has the 'owner' role.
-    // Checks custom claims first, falling back to the staff profile document.
-    function isOwner() {
+    // Returns true if the authenticated user's email matches the owner email.
+    // This is a lightweight check that doesn't require a Firestore document lookup.
+    function isOwnerByEmail() {
       return isAuthenticated() &&
-             (request.auth.token.role == 'owner' || callerProfile().role == 'owner');
+             request.auth.token.email == 'cherukuridakshithsai@gmail.com';
+    }
+
+    // Returns true if the authenticated user has the 'owner' role.
+    // Checks owner email first (no Firestore read needed), then custom claims,
+    // then falls back to the staff profile document.
+    function isOwner() {
+      return isOwnerByEmail() ||
+             (isAuthenticated() &&
+              (request.auth.token.role == 'owner' ||
+               (exists(/databases/$(database)/documents/staff/$(request.auth.uid)) &&
+                callerProfile().role == 'owner')));
     }
 
     // Returns true if the authenticated user is an active staff member or owner.
-    // Checks custom claims first, falling back to the staff profile document.
+    // Owners always pass this check. Staff members must have status 'active'.
     function isActiveStaff() {
-      return isAuthenticated() &&
-             (request.auth.token.status == 'active' || callerProfile().status == 'active') &&
-             (request.auth.token.role == 'staff' || request.auth.token.role == 'owner' ||
-              callerProfile().role == 'staff' || callerProfile().role == 'owner');
+      return isOwner() ||
+             (isAuthenticated() &&
+              exists(/databases/$(database)/documents/staff/$(request.auth.uid)) &&
+              (request.auth.token.status == 'active' || callerProfile().status == 'active') &&
+              (request.auth.token.role == 'staff' || request.auth.token.role == 'owner' ||
+               callerProfile().role == 'staff' || callerProfile().role == 'owner'));
     }
 
     // -------------------------------------------------------------------------
@@ -90,9 +103,8 @@ service cloud.firestore {
     // Purpose: Staff profiles and account settings.
     // -------------------------------------------------------------------------
     match /staff/{staffId} {
-      // A user can read their own profile; owner can read all profiles.
-      allow read: if isAuthenticated() &&
-                  (request.auth.uid == staffId || isOwner());
+      // Any active staff member can read profiles.
+      allow read: if isActiveStaff();
 
       // Only the owner can create new staff profiles.
       allow create: if isOwner();
@@ -118,7 +130,9 @@ service cloud.firestore {
       allow read: if isActiveStaff();
 
       // Active staff can issue cards, but balance cannot be negative.
-      allow create: if isActiveStaff() && request.resource.data.tokens >= 0;
+      allow create: if isActiveStaff() && 
+                    request.resource.data.tokens >= 0 &&
+                    (!('balanceRupees' in request.resource.data) || request.resource.data.balanceRupees >= 0);
 
       // Owner can update any field. Staff can only update the tokens balance field,
       // and balance can never be negative.
@@ -126,8 +140,9 @@ service cloud.firestore {
                     (isActiveStaff() &&
                      (request.auth.token.role == 'staff' || callerProfile().role == 'staff') &&
                      request.resource.data.tokens >= 0 &&
+                     (!('balanceRupees' in request.resource.data) || request.resource.data.balanceRupees >= 0) &&
                      request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['tokens', 'updatedAt']));
+                       .hasOnly(['tokens', 'balanceRupees', 'updatedAt']));
 
       // Only owner can delete token accounts.
       allow delete: if isOwner();
@@ -139,7 +154,7 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     match /token_transactions/{txId} {
       allow read: if isActiveStaff();
-      allow create: if isActiveStaff() && request.resource.data.tokens >= 0;
+      allow create: if isActiveStaff();
       allow update, delete: if false;
     }
 

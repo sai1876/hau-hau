@@ -26,6 +26,9 @@ let firebaseBlocked = false;
 
 // Check if Firebase is actually configured with environment variables
 export const isFirebaseConfigured = () => {
+  if (process.env.NODE_ENV === 'production') {
+    return true; // Strictly assume Firebase is configured in production
+  }
   if (firebaseBlocked) return false;
   return !!(
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
@@ -36,6 +39,10 @@ export const isFirebaseConfigured = () => {
 };
 
 export const markFirebaseBlocked = () => {
+  if (process.env.NODE_ENV === 'production') {
+    console.error("Firebase/Firestore was blocked or failed to load. LocalStorage fallback is disabled in production.");
+    return;
+  }
   if (!firebaseBlocked) {
     console.warn("Firebase/Firestore was blocked or failed to load. Falling back to LocalStorage mode.");
     firebaseBlocked = true;
@@ -43,6 +50,15 @@ export const markFirebaseBlocked = () => {
       window.dispatchEvent(new CustomEvent('firebase-fallback'));
     }
   }
+};
+
+// Only block Firebase for real connectivity/unavailability errors.
+// Permission-denied (code: 'permission-denied') means Firestore IS reachable —
+// it's just an access control issue for that specific collection, not a reason
+// to fall back the entire app to LocalStorage.
+const isConnectivityError = (error: unknown): boolean => {
+  const code = (error as { code?: string })?.code;
+  return code !== 'permission-denied' && code !== 'unauthenticated';
 };
 
 const DEFAULT_MENU: MenuItem[] = [
@@ -289,8 +305,8 @@ export const db = {
           callback(menuItems);
         }
       }, (error) => {
-        console.warn("Firestore menu subscription failed/blocked. Falling back to LocalStorage.", error);
-        this.markFirebaseBlocked();
+        console.warn("Firestore menu subscription error:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
         if (!isUnsubscribed) {
           localUnsub = this.subscribeLocalStorageMenu(callback);
         }
@@ -319,8 +335,8 @@ export const db = {
         });
         callback(ordersList);
       }, (error) => {
-        console.warn("Firestore orders subscription failed/blocked. Falling back to LocalStorage.", error);
-        this.markFirebaseBlocked();
+        console.warn("Firestore orders subscription error:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
         if (!isUnsubscribed) {
           localUnsub = this.subscribeLocalStorageOrders(callback);
         }
@@ -343,6 +359,11 @@ export const db = {
       const firestoreUnsub = onSnapshot(staffCol, (snapshot) => {
         if (isUnsubscribed) return;
         if (snapshot.empty) {
+          if (process.env.NODE_ENV === 'production') {
+            console.warn("Staff collection is empty. Please run the seeding script to create the owner profile.");
+            callback([]);
+            return;
+          }
           // Auto-seed
           DEFAULT_STAFF.forEach((member) => {
             setDoc(doc(firestore, 'staff', member.id), member).catch(() => {});
@@ -356,8 +377,8 @@ export const db = {
           callback(staffList);
         }
       }, (error) => {
-        console.warn("Firestore staff subscription failed/blocked. Falling back to LocalStorage.", error);
-        this.markFirebaseBlocked();
+        console.warn("Firestore staff subscription error:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
         if (!isUnsubscribed) {
           localUnsub = this.subscribeLocalStorageStaff(callback);
         }
@@ -385,8 +406,8 @@ export const db = {
         });
         callback(tokensList);
       }, (error) => {
-        console.warn("Firestore tokens subscription failed/blocked. Falling back to LocalStorage.", error);
-        this.markFirebaseBlocked();
+        console.warn("Firestore tokens subscription error:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
         if (!isUnsubscribed) {
           localUnsub = this.subscribeLocalStorageTokens(callback);
         }
@@ -415,8 +436,8 @@ export const db = {
         });
         callback(txsList);
       }, (error) => {
-        console.warn("Firestore transactions subscription failed/blocked. Falling back to LocalStorage.", error);
-        this.markFirebaseBlocked();
+        console.warn("Firestore transactions subscription error:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
         if (!isUnsubscribed) {
           localUnsub = this.subscribeLocalStorageTransactions(callback);
         }
@@ -443,8 +464,9 @@ export const db = {
       try {
         await setDoc(doc(firestore, 'token_transactions', newTx.id), newTx);
       } catch (error) {
-        console.error("Firestore addTokenTransaction failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore addTokenTransaction failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -472,8 +494,9 @@ export const db = {
       try {
         await setDoc(doc(firestore, 'menu', newItem.id), newItem);
       } catch (error) {
-        console.error("Firestore addMenuItem failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore addMenuItem failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -506,8 +529,9 @@ export const db = {
           });
         }
       } catch (error) {
-        console.error("Firestore toggleMenuAvailability failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore toggleMenuAvailability failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -529,8 +553,9 @@ export const db = {
       try {
         await deleteDoc(doc(firestore, 'menu', itemId));
       } catch (error) {
-        console.error("Firestore deleteMenuItem failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore deleteMenuItem failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -550,8 +575,9 @@ export const db = {
       try {
         await updateDoc(doc(firestore, 'menu', itemId), updatedFields);
       } catch (error) {
-        console.error("Firestore updateMenuItem failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore updateMenuItem failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -579,8 +605,9 @@ export const db = {
       try {
         await setDoc(doc(firestore, 'staff', newAccount.id), newAccount);
       } catch (error) {
-        console.error("Firestore addStaff failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore addStaff failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -606,8 +633,9 @@ export const db = {
       try {
         await setDoc(doc(firestore, 'staff', id), newAccount);
       } catch (error) {
-        console.error("Firestore addStaffWithId failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore addStaffWithId failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -640,8 +668,9 @@ export const db = {
           });
         }
       } catch (error) {
-        console.error("Firestore toggleStaffStatus failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore toggleStaffStatus failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -663,8 +692,9 @@ export const db = {
       try {
         await deleteDoc(doc(firestore, 'staff', staffId));
       } catch (error) {
-        console.error("Firestore deleteStaff failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore deleteStaff failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -684,8 +714,9 @@ export const db = {
       try {
         await updateDoc(doc(firestore, 'staff', staffId), updatedFields);
       } catch (error) {
-        console.error("Firestore updateStaffAccount failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore updateStaffAccount failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -716,8 +747,9 @@ export const db = {
       try {
         await setDoc(doc(firestore, 'orders', newOrder.id), newOrder);
       } catch (error) {
-        console.error("Firestore createOrder failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore createOrder failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -749,8 +781,9 @@ export const db = {
         
         await updateDoc(doc(firestore, 'orders', orderId), updateData);
       } catch (error) {
-        console.error("Firestore updateOrderStatus failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore updateOrderStatus failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -776,6 +809,7 @@ export const db = {
     const newAccount: TokenAccount = {
       ...account,
       id: 't_' + Math.random().toString(36).substr(2, 9),
+      balanceRupees: 0,
       createdAt: new Date().toISOString()
     };
 
@@ -784,8 +818,9 @@ export const db = {
       try {
         await setDoc(doc(firestore, 'tokens', newAccount.id), newAccount);
       } catch (error) {
-        console.error("Firestore addTokenAccount failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore addTokenAccount failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -806,8 +841,9 @@ export const db = {
       try {
         await updateDoc(doc(firestore, 'tokens', tokenId), updatedFields);
       } catch (error) {
-        console.error("Firestore updateTokenAccount failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore updateTokenAccount failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -827,8 +863,9 @@ export const db = {
       try {
         await deleteDoc(doc(firestore, 'tokens', tokenId));
       } catch (error) {
-        console.error("Firestore deleteTokenAccount failed, falling back to LocalStorage:", error);
-        this.markFirebaseBlocked();
+        console.error("Firestore deleteTokenAccount failed:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -869,8 +906,8 @@ export const db = {
           callback(snapshot.data() as Settings);
         }
       }, (error) => {
-        console.warn("Firestore settings subscription failed. Falling back to LocalStorage.", error);
-        this.markFirebaseBlocked();
+        console.warn("Firestore settings subscription error:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
         if (!isUnsubscribed) {
           localUnsub = this.subscribeLocalStorageSettings(callback);
         }
@@ -889,13 +926,14 @@ export const db = {
     let useLocal = !isFirebaseConfigured();
     if (isFirebaseConfigured()) {
       try {
-        await updateDoc(doc(firestore, 'settings', 'settings_default'), {
+        await setDoc(doc(firestore, 'settings', 'settings_default'), {
           ...updatedFields,
           updatedAt: new Date().toISOString()
-        });
+        }, { merge: true });
       } catch (error) {
         console.error("Firestore updateSettings failed:", error);
-        this.markFirebaseBlocked();
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -934,8 +972,8 @@ export const db = {
         });
         callback(logs);
       }, (error) => {
-        console.warn("Firestore audit logs subscription failed. Falling back to LocalStorage.", error);
-        this.markFirebaseBlocked();
+        console.warn("Firestore audit logs subscription error:", error);
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
         if (!isUnsubscribed) {
           localUnsub = this.subscribeLocalStorageAuditLogs(callback);
         }
@@ -963,7 +1001,8 @@ export const db = {
         await setDoc(doc(firestore, 'audit_logs', newLog.id), newLog);
       } catch (error) {
         console.error("Firestore addAuditLog failed:", error);
-        this.markFirebaseBlocked();
+        if (isConnectivityError(error)) this.markFirebaseBlocked();
+        if (process.env.NODE_ENV === 'production') throw error;
         useLocal = true;
       }
     }
@@ -996,11 +1035,12 @@ export const db = {
         if (!tokenDoc.exists()) throw new Error('Token card not found.');
         const currentCard = tokenDoc.data() as TokenAccount;
         
-        const newBalance = Math.round((currentCard.tokens + tokensToAdd) * 100) / 100;
+        const newBalance = Math.round(currentCard.tokens + tokensToAdd);
         if (newBalance < 0) throw new Error('Balance cannot be negative.');
         
         transaction.update(tokenRef, {
           tokens: newBalance,
+          balanceRupees: currentCard.balanceRupees || 0,
           updatedAt: new Date().toISOString()
         });
         
@@ -1026,8 +1066,8 @@ export const db = {
           targetId: studentId,
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
           timestamp: new Date().toISOString(),
-          before: { tokens: currentCard.tokens },
-          after: { tokens: newBalance }
+          before: { tokens: currentCard.tokens, balanceRupees: currentCard.balanceRupees || 0 },
+          after: { tokens: newBalance, balanceRupees: currentCard.balanceRupees || 0 }
         };
         transaction.set(auditRef, auditLog);
       });
@@ -1038,13 +1078,15 @@ export const db = {
       if (cardIndex === -1) throw new Error('Student card not found.');
       
       const currentCard = list[cardIndex];
-      const newBalance = Math.round((currentCard.tokens + tokensToAdd) * 100) / 100;
+      const newBalance = Math.round(currentCard.tokens + tokensToAdd);
       if (newBalance < 0) throw new Error('Balance cannot be negative.');
       
       const oldBalance = currentCard.tokens;
+      const oldBalanceRupees = currentCard.balanceRupees || 0;
       list[cardIndex] = {
         ...currentCard,
         tokens: newBalance,
+        balanceRupees: oldBalanceRupees,
         updatedAt: new Date().toISOString()
       };
       localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
@@ -1071,8 +1113,8 @@ export const db = {
         actorUid,
         actorRole,
         targetId: studentId,
-        before: { tokens: oldBalance },
-        after: { tokens: newBalance }
+        before: { tokens: oldBalance, balanceRupees: oldBalanceRupees },
+        after: { tokens: newBalance, balanceRupees: oldBalanceRupees }
       });
       
       window.dispatchEvent(new Event('storage'));
@@ -1081,19 +1123,19 @@ export const db = {
 
   async deductTokensTransaction(
     studentId: string,
-    tokensToDeduct: number,
+    subtotal: number,
     orderId: string,
     soldBy: string,
     actorUid: string,
     actorRole: 'staff' | 'owner'
-  ): Promise<void> {
+  ): Promise<{ tokensDeducted: number; creditApplied: number; creditReceived: number; newBalanceRupees: number }> {
     if (isFirebaseConfigured()) {
       const tokenRef = doc(firestore, 'tokens', studentId);
       const txRef = doc(collection(firestore, 'token_transactions'));
       const auditRef = doc(collection(firestore, 'audit_logs'));
       const settingsRef = doc(firestore, 'settings', 'settings_default');
       
-      await runTransaction(firestore, async (transaction) => {
+      return await runTransaction(firestore, async (transaction) => {
         const tokenDoc = await transaction.get(tokenRef);
         if (!tokenDoc.exists()) throw new Error('Token card not found.');
         const currentCard = tokenDoc.data() as TokenAccount;
@@ -1101,13 +1143,21 @@ export const db = {
         const settingsDoc = await transaction.get(settingsRef);
         const rate = settingsDoc.exists() ? (settingsDoc.data()?.tokenValueInRupees || 30) : 30;
         
-        const newBalance = Math.round((currentCard.tokens - tokensToDeduct) * 100) / 100;
-        if (newBalance < 0) {
+        const balanceRupees = currentCard.balanceRupees || 0;
+        const amountPayable = Math.max(0, subtotal - balanceRupees);
+        const tokensToDeduct = Math.ceil(amountPayable / rate);
+        const creditApplied = subtotal - amountPayable;
+        
+        const newTokensBalance = currentCard.tokens - tokensToDeduct;
+        if (newTokensBalance < 0) {
           throw new Error(`Insufficient tokens! Balance is ${currentCard.tokens}, required is ${tokensToDeduct}.`);
         }
         
+        const newBalanceRupees = balanceRupees - subtotal + (tokensToDeduct * rate);
+        
         transaction.update(tokenRef, {
-          tokens: newBalance,
+          tokens: newTokensBalance,
+          balanceRupees: newBalanceRupees,
           updatedAt: new Date().toISOString()
         });
         
@@ -1134,10 +1184,17 @@ export const db = {
           targetId: studentId,
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
           timestamp: new Date().toISOString(),
-          before: { tokens: currentCard.tokens, orderId },
-          after: { tokens: newBalance, orderId }
+          before: { tokens: currentCard.tokens, balanceRupees, orderId },
+          after: { tokens: newTokensBalance, balanceRupees: newBalanceRupees, orderId }
         };
         transaction.set(auditRef, auditLog);
+
+        return {
+          tokensDeducted: tokensToDeduct,
+          creditApplied,
+          creditReceived: (tokensToDeduct * rate) - amountPayable,
+          newBalanceRupees
+        };
       });
     } else {
       const tokens = localStorage.getItem(TOKENS_KEY);
@@ -1146,21 +1203,29 @@ export const db = {
       if (cardIndex === -1) throw new Error('Student card not found.');
       
       const currentCard = list[cardIndex];
-      const newBalance = Math.round((currentCard.tokens - tokensToDeduct) * 100) / 100;
-      if (newBalance < 0) {
+      const settingsRaw = localStorage.getItem('hau_hau_settings');
+      const rate = settingsRaw ? (JSON.parse(settingsRaw).tokenValueInRupees || 30) : 30;
+      
+      const balanceRupees = currentCard.balanceRupees || 0;
+      const amountPayable = Math.max(0, subtotal - balanceRupees);
+      const tokensToDeduct = Math.ceil(amountPayable / rate);
+      const creditApplied = subtotal - amountPayable;
+      
+      const newTokensBalance = currentCard.tokens - tokensToDeduct;
+      if (newTokensBalance < 0) {
         throw new Error(`Insufficient tokens! Balance is ${currentCard.tokens}, required is ${tokensToDeduct}.`);
       }
       
-      const oldBalance = currentCard.tokens;
+      const newBalanceRupees = balanceRupees - subtotal + (tokensToDeduct * rate);
+      const oldTokensBalance = currentCard.tokens;
+      
       list[cardIndex] = {
         ...currentCard,
-        tokens: newBalance,
+        tokens: newTokensBalance,
+        balanceRupees: newBalanceRupees,
         updatedAt: new Date().toISOString()
       };
       localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
-      
-      const settingsRaw = localStorage.getItem('hau_hau_settings');
-      const rate = settingsRaw ? (JSON.parse(settingsRaw).tokenValueInRupees || 30) : 30;
       
       const txRecord: TokenTransaction = {
         id: 'tx_' + Math.random().toString(36).substr(2, 9),
@@ -1185,17 +1250,25 @@ export const db = {
         actorUid,
         actorRole,
         targetId: studentId,
-        before: { tokens: oldBalance, orderId },
-        after: { tokens: newBalance, orderId }
+        before: { tokens: oldTokensBalance, balanceRupees, orderId },
+        after: { tokens: newTokensBalance, balanceRupees: newBalanceRupees, orderId }
       });
       
       window.dispatchEvent(new Event('storage'));
+
+      return {
+        tokensDeducted: tokensToDeduct,
+        creditApplied,
+        creditReceived: (tokensToDeduct * rate) - amountPayable,
+        newBalanceRupees
+      };
     }
   },
 
   async refundTokensTransaction(
     studentId: string,
     tokensToRefund: number,
+    orderTotal: number,
     orderId: string,
     actorUid: string,
     actorRole: 'staff' | 'owner'
@@ -1204,16 +1277,24 @@ export const db = {
       const tokenRef = doc(firestore, 'tokens', studentId);
       const txRef = doc(collection(firestore, 'token_transactions'));
       const auditRef = doc(collection(firestore, 'audit_logs'));
+      const settingsRef = doc(firestore, 'settings', 'settings_default');
       
       await runTransaction(firestore, async (transaction) => {
         const tokenDoc = await transaction.get(tokenRef);
         if (!tokenDoc.exists()) throw new Error('Token card not found.');
         const currentCard = tokenDoc.data() as TokenAccount;
         
-        const newBalance = Math.round((currentCard.tokens + tokensToRefund) * 100) / 100;
+        const settingsDoc = await transaction.get(settingsRef);
+        const rate = settingsDoc.exists() ? (settingsDoc.data()?.tokenValueInRupees || 30) : 30;
+        
+        const newBalance = Math.round(currentCard.tokens + tokensToRefund);
+        const currentBalanceRupees = currentCard.balanceRupees || 0;
+        
+        const newBalanceRupees = currentBalanceRupees - ((tokensToRefund * rate) - orderTotal);
         
         transaction.update(tokenRef, {
           tokens: newBalance,
+          balanceRupees: newBalanceRupees,
           updatedAt: new Date().toISOString()
         });
         
@@ -1224,7 +1305,7 @@ export const db = {
           studentName: currentCard.name,
           cardNo: currentCard.cardNo,
           tokens: tokensToRefund,
-          amount: tokensToRefund * 30,
+          amount: tokensToRefund * rate,
           soldBy: actorRole === 'owner' ? 'owner' : 'staff',
           orderId,
           createdAt: new Date().toISOString(),
@@ -1240,8 +1321,8 @@ export const db = {
           targetId: studentId,
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
           timestamp: new Date().toISOString(),
-          before: { tokens: currentCard.tokens, orderId },
-          after: { tokens: newBalance, orderId }
+          before: { tokens: currentCard.tokens, balanceRupees: currentBalanceRupees, orderId },
+          after: { tokens: newBalance, balanceRupees: newBalanceRupees, orderId }
         };
         transaction.set(auditRef, auditLog);
       });
@@ -1252,12 +1333,18 @@ export const db = {
       if (cardIndex === -1) throw new Error('Student card not found.');
       
       const currentCard = list[cardIndex];
-      const newBalance = Math.round((currentCard.tokens + tokensToRefund) * 100) / 100;
+      const settingsRaw = localStorage.getItem('hau_hau_settings');
+      const rate = settingsRaw ? (JSON.parse(settingsRaw).tokenValueInRupees || 30) : 30;
       
+      const newBalance = Math.round(currentCard.tokens + tokensToRefund);
+      const currentBalanceRupees = currentCard.balanceRupees || 0;
+      const newBalanceRupees = currentBalanceRupees - ((tokensToRefund * rate) - orderTotal);
       const oldBalance = currentCard.tokens;
+      
       list[cardIndex] = {
         ...currentCard,
         tokens: newBalance,
+        balanceRupees: newBalanceRupees,
         updatedAt: new Date().toISOString()
       };
       localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
@@ -1269,7 +1356,7 @@ export const db = {
         studentName: currentCard.name,
         cardNo: currentCard.cardNo,
         tokens: tokensToRefund,
-        amount: tokensToRefund * 30,
+        amount: tokensToRefund * rate,
         soldBy: actorRole === 'owner' ? 'owner' : 'staff',
         orderId,
         createdAt: new Date().toISOString(),
@@ -1285,8 +1372,8 @@ export const db = {
         actorUid,
         actorRole,
         targetId: studentId,
-        before: { tokens: oldBalance, orderId },
-        after: { tokens: newBalance, orderId }
+        before: { tokens: oldBalance, balanceRupees: currentBalanceRupees, orderId },
+        after: { tokens: newBalance, balanceRupees: newBalanceRupees, orderId }
       });
       
       window.dispatchEvent(new Event('storage'));
@@ -1296,6 +1383,7 @@ export const db = {
   async adjustTokensTransaction(
     studentId: string,
     targetTokens: number,
+    targetBalanceRupees: number,
     reason: string,
     actorUid: string,
     actorRole: 'staff' | 'owner'
@@ -1314,10 +1402,13 @@ export const db = {
         const settingsDoc = await transaction.get(settingsRef);
         const rate = settingsDoc.exists() ? (settingsDoc.data()?.tokenValueInRupees || 30) : 30;
         
-        const delta = Math.round((targetTokens - currentCard.tokens) * 100) / 100;
+        const delta = Math.round(targetTokens - currentCard.tokens);
+        const currentBalanceRupees = currentCard.balanceRupees || 0;
+        const deltaRupees = targetBalanceRupees - currentBalanceRupees;
         
         transaction.update(tokenRef, {
           tokens: targetTokens,
+          balanceRupees: targetBalanceRupees,
           updatedAt: new Date().toISOString()
         });
         
@@ -1328,7 +1419,7 @@ export const db = {
           studentName: currentCard.name,
           cardNo: currentCard.cardNo,
           tokens: delta,
-          amount: delta * rate,
+          amount: (delta * rate) + deltaRupees,
           soldBy: 'owner',
           createdAt: new Date().toISOString(),
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID
@@ -1343,8 +1434,8 @@ export const db = {
           targetId: studentId,
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
           timestamp: new Date().toISOString(),
-          before: { tokens: currentCard.tokens, reason },
-          after: { tokens: targetTokens, reason }
+          before: { tokens: currentCard.tokens, balanceRupees: currentBalanceRupees, reason },
+          after: { tokens: targetTokens, balanceRupees: targetBalanceRupees, reason }
         };
         transaction.set(auditRef, auditLog);
       });
@@ -1355,12 +1446,15 @@ export const db = {
       if (cardIndex === -1) throw new Error('Student card not found.');
       
       const currentCard = list[cardIndex];
-      const delta = Math.round((targetTokens - currentCard.tokens) * 100) / 100;
+      const delta = Math.round(targetTokens - currentCard.tokens);
+      const currentBalanceRupees = currentCard.balanceRupees || 0;
+      const deltaRupees = targetBalanceRupees - currentBalanceRupees;
       const oldBalance = currentCard.tokens;
       
       list[cardIndex] = {
         ...currentCard,
         tokens: targetTokens,
+        balanceRupees: targetBalanceRupees,
         updatedAt: new Date().toISOString()
       };
       localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
@@ -1375,7 +1469,7 @@ export const db = {
         studentName: currentCard.name,
         cardNo: currentCard.cardNo,
         tokens: delta,
-        amount: delta * rate,
+        amount: (delta * rate) + deltaRupees,
         soldBy: 'owner',
         createdAt: new Date().toISOString(),
         outletId: currentCard.outletId || DEFAULT_OUTLET_ID
@@ -1390,8 +1484,8 @@ export const db = {
         actorUid,
         actorRole,
         targetId: studentId,
-        before: { tokens: oldBalance, reason },
-        after: { tokens: targetTokens, reason }
+        before: { tokens: oldBalance, balanceRupees: currentBalanceRupees, reason },
+        after: { tokens: targetTokens, balanceRupees: targetBalanceRupees, reason }
       });
       
       window.dispatchEvent(new Event('storage'));

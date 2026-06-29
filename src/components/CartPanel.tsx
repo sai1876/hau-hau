@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { TokenIcon } from './TokenIcon';
 import { Trash, Money, CreditCard, Coins, ArrowCircleUp } from '@phosphor-icons/react';
+import { InfoTag } from './InfoTag';
 
 interface CartPanelProps {
   onClose?: () => void;
@@ -26,9 +27,12 @@ export function CartPanel({ onClose }: CartPanelProps) {
   const cartItems = activeTable ? tableCarts[activeTable] || [] : [];
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const tokenValue = settings?.tokenValueInRupees || 30;
-  const requiredTokens = Math.round((subtotal / tokenValue) * 100) / 100;
+  const total = settings?.taxEnabled ? subtotal * 1.05 : subtotal;
 
   const studentCard = tokens.find(t => t.cardNo === tokenCardInput.trim());
+  const balanceRupees = studentCard?.balanceRupees || 0;
+  const amountPayable = Math.max(0, total - balanceRupees);
+  const requiredTokens = Math.ceil(amountPayable / tokenValue);
   const hasSufficientTokens = studentCard ? studentCard.tokens >= requiredTokens : false;
 
   const isValid = 
@@ -161,16 +165,32 @@ export function CartPanel({ onClose }: CartPanelProps) {
         <div className="bg-surface-header/55 p-4 border-t border-border flex flex-col gap-4.5 shrink-0">
           <div className="receipt-line" />
           
+          {settings?.taxEnabled && (
+            <div className="flex flex-col gap-1 px-1 font-mono text-[10px] leading-relaxed text-text-muted mb-1.5 border-b border-border/20 pb-2">
+              <div className="flex justify-between">
+                <span>Subtotal (Net):</span>
+                <span>₹{subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-warning/90">
+                <span>Service Tax / GST (5%):</span>
+                <span>₹{(subtotal * 0.05).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-between items-center px-1">
-            <span className="text-xs text-text-muted font-semibold">Total</span>
-            <span className="text-lg font-bold text-foreground font-mono">₹{subtotal.toFixed(2)}</span>
+            <span className="text-xs text-text-muted font-semibold">Total Amount</span>
+            <span className="text-lg font-bold text-foreground font-mono">₹{total.toFixed(2)}</span>
           </div>
 
           {/* Payment selector */}
           <div className="flex flex-col gap-2">
-            <span className="text-xs text-text-muted font-bold mb-0.5">Payment Mode</span>
-            <div className="grid grid-cols-3 gap-2.5">
-              {(['cash', 'online', 'tokens'] as const).map((mode) => {
+            <span className="text-xs text-text-muted font-bold mb-0.5 flex items-center">
+              Payment Mode
+              <InfoTag text="Cash: direct physical payment. Online: external UPI/Card gateway. Tokens: deducts whole physical passes from student NFC cards." position="top" />
+            </span>
+            <div className={`grid ${settings?.manualUpiEnabled ?? true ? 'grid-cols-3' : 'grid-cols-2'} gap-2.5`}>
+              {(['cash', 'online', 'tokens'] as const).filter(mode => mode !== 'online' || (settings?.manualUpiEnabled ?? true)).map((mode) => {
                 const active = paymentMode === mode;
                 let borderClass = 'border-border text-text-muted bg-surface/30 hover:bg-surface/50 hover:text-foreground';
                 let icon = null;
@@ -207,7 +227,10 @@ export function CartPanel({ onClose }: CartPanelProps) {
           {paymentMode === 'tokens' && (
             <div className="flex flex-col gap-3 bg-blue-500/5 border border-blue-500/20 p-3.5 rounded-lg animate-fade-in mt-1">
               <div className="flex justify-between items-center text-[10px] font-bold text-blue-400 uppercase tracking-wider">
-                <span>Token Payment Details</span>
+                <span className="flex items-center">
+                  Token Payment Details
+                  <InfoTag text="Deducts whole physical tokens. Any remaining change from order overpayment is saved back to the student's card as digital Rupees credit." position="top" />
+                </span>
                 <span className="font-mono text-text-muted">Rate: ₹{tokenValue}/token</span>
               </div>
               
@@ -223,19 +246,61 @@ export function CartPanel({ onClose }: CartPanelProps) {
               </div>
 
               {tokenCardInput.trim() !== '' && (
-                <div className="text-[11px] font-semibold">
+                <div className="text-[11px] font-semibold flex flex-col gap-1.5 border-t border-blue-500/10 pt-2.5 mt-1">
                    {!studentCard ? (
                      <span className="text-error font-bold flex items-center gap-1">⚠ Card not found</span>
-                   ) : !hasSufficientTokens ? (
-                     <span className="text-error font-bold flex flex-col gap-0.5">
-                       <span>⚠ Insufficient balance</span>
-                       <span className="text-[9px] opacity-80">Has: {studentCard.tokens.toFixed(2)} tokens, Needs: {requiredTokens.toFixed(2)}</span>
-                     </span>
                    ) : (
-                     <div className="flex flex-col gap-0.5 text-success">
-                       <span className="font-bold">✓ Verified: {studentCard.name}</span>
-                       <span className="text-[10px] opacity-80">Balance: {studentCard.tokens.toFixed(2)} tokens</span>
-                     </div>
+                     <>
+                       <div className="flex justify-between text-success">
+                         <span className="font-bold">✓ Verified: {studentCard.name}</span>
+                         <span className="font-bold">{studentCard.tokens} tokens</span>
+                       </div>
+                       <div className="flex flex-col gap-1 bg-surface-container/20 p-2 rounded border border-border/50 mt-1 font-mono text-[10px] leading-relaxed text-text-muted">
+                          {settings?.taxEnabled ? (
+                            <>
+                              <div className="flex justify-between">
+                                <span>Subtotal (Net):</span>
+                                <span>₹{subtotal.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-warning/80">
+                                <span>GST / Service Tax (5%):</span>
+                                <span>₹{(subtotal * 0.05).toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between border-t border-border/30 pt-1 mt-0.5">
+                                <span>Order Total (Gross):</span>
+                                <span className="text-foreground font-semibold">₹{total.toFixed(2)}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex justify-between">
+                              <span>Order Total:</span>
+                              <span className="text-foreground font-semibold">₹{subtotal.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {balanceRupees > 0 && (
+                           <div className="flex justify-between text-[#71d384]">
+                             <span>Card Store Credit:</span>
+                             <span>-₹{Math.min(subtotal, balanceRupees).toFixed(2)}</span>
+                           </div>
+                         )}
+                         <div className="flex justify-between border-t border-border/30 pt-1 mt-0.5">
+                           <span>Amount Payable:</span>
+                           <span className="text-foreground font-bold">₹{amountPayable.toFixed(2)}</span>
+                         </div>
+                         {!hasSufficientTokens ? (
+                           <div className="text-error font-bold mt-1 text-[10px] font-sans">
+                             ⚠ Insufficient card tokens! Required: {requiredTokens}, Card has: {studentCard.tokens}
+                           </div>
+                         ) : (
+                           requiredTokens > 0 && (
+                             <div className="flex justify-between text-blue-400 font-bold border-t border-border/30 pt-1 mt-0.5">
+                               <span>New Change Saved:</span>
+                               <span>+₹{((requiredTokens * tokenValue) - amountPayable).toFixed(2)}</span>
+                             </div>
+                           )
+                         )}
+                       </div>
+                     </>
                    )}
                 </div>
               )}

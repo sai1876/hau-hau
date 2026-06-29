@@ -251,7 +251,7 @@ export function ProfileSection() {
               </div>
               <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
                 <span className="text-xs text-text-muted font-semibold">Tokens Dispensed</span>
-                <span className="block font-mono font-bold text-base text-blue-400 mt-1">{staffTokensSold.toFixed(2)} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-400" /></span>
+                <span className="block font-mono font-bold text-base text-blue-400 mt-1">{staffTokensSold.toFixed(0)} <TokenIcon className="ml-1 w-3.5 h-3.5 text-blue-400" /></span>
               </div>
               <div className="bg-surface-container/30 border border-border p-4 rounded-lg">
                 <span className="text-xs text-text-muted font-semibold">Token Revenue</span>

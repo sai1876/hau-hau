@@ -162,99 +162,117 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [addToast]);
 
   // Initialize data subscriptions on mount
+  // 1. Listen to Auth State
   useEffect(() => {
-    // 1. Subscribe to Menu
-    const unsubMenu = db.subscribeMenu((updatedMenu) => {
-      setMenu(updatedMenu);
-    });
-
-    // 2. Subscribe to Orders
-    const unsubOrders = db.subscribeOrders((updatedOrders) => {
-      setOrders(updatedOrders);
-    });
-
-    // 3. Subscribe to Staff Accounts
-    const unsubStaff = db.subscribeStaff((updatedStaff) => {
-      setStaffList(updatedStaff);
-    });
-
-    // 4. Subscribe to Token Accounts
-    const unsubTokens = db.subscribeTokens((updatedTokens) => {
-      setTokens(updatedTokens);
-    });
-
-    // 5. Subscribe to Token Transactions
-    const unsubTransactions = db.subscribeTokenTransactions((updatedTxs) => {
-      setTokenTransactions(updatedTxs);
-    });
-
-    // 6. Subscribe to Settings
-    const unsubSettings = db.subscribeSettings((updatedSettings) => {
-      setSettings(updatedSettings);
-    });
-
-    // 7. Subscribe to Audit Logs
-    const unsubAuditLogs = db.subscribeAuditLogs((updatedLogs) => {
-      setAuditLogs(updatedLogs);
-    });
-
-    // Defer state updates to prevent synchronous setState inside useEffect
-    let unsubAuth = () => {};
-    const timer = setTimeout(() => {
-      if (usingFirebase) {
-        unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-          if (firebaseUser) {
-            try {
-              const docRef = doc(firestore, 'staff', firebaseUser.uid);
-              const docSnap = await getDoc(docRef);
-              if (docSnap.exists()) {
-                const profile = docSnap.data() as StaffAccount;
-                const role = (profile.role || (profile.username === 'owner' ? 'owner' : 'staff')) as 'staff' | 'owner';
-                
-                if (profile.status === 'inactive') {
-                  addToast('This account is disabled.', 'error');
-                  await signOut(auth);
-                  setCurrentUser(null);
-                  return;
-                }
-
-                setCurrentUser({
-                  name: profile.name,
-                  role,
-                  username: profile.username
-                });
-
-                // Redirect based on role on login screen
-                if (window.location.pathname === '/login') {
-                  if (role === 'owner') {
-                    router.push('/owner');
-                  } else {
-                    router.push('/staff');
-                  }
-                }
-              }
-            } catch (e) {
-              console.warn('Error fetching auth user profile:', e);
-            }
-          } else {
-            setCurrentUser(null);
-          }
-        }, (error) => {
-          console.warn("Auth state changed error/blocked. Triggering LocalStorage fallback:", error);
-          db.markFirebaseBlocked();
-        });
-      } else {
-        const savedUser = localStorage.getItem('hau_hau_session');
-        if (savedUser) {
-          setCurrentUser(JSON.parse(savedUser));
-        }
+    if (!usingFirebase) {
+      const savedUser = localStorage.getItem('hau_hau_session');
+      if (savedUser) {
+        setCurrentUser(JSON.parse(savedUser));
       }
-
       const savedCarts = localStorage.getItem('hau_hau_table_carts');
       if (savedCarts) {
         setTableCarts(JSON.parse(savedCarts));
       }
-    }, 0);
+      return;
+    }
+
+    const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const docRef = doc(firestore, 'staff', firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const profile = docSnap.data() as StaffAccount;
+            const role = (profile.role || (profile.username === 'owner' ? 'owner' : 'staff')) as 'staff' | 'owner';
+            
+            if (profile.status === 'inactive') {
+              addToast('This account is disabled.', 'error');
+              await signOut(auth);
+              setCurrentUser(null);
+              return;
+            }
+
+            setCurrentUser({
+              name: profile.name,
+              role,
+              username: profile.username
+            });
+
+            // Redirect based on role on login screen
+            if (window.location.pathname === '/login') {
+              if (role === 'owner') {
+                router.push('/owner');
+              } else {
+                router.push('/staff');
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Error fetching auth user profile:', e);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    }, (error) => {
+      console.warn("Auth state changed error/blocked. Triggering LocalStorage fallback:", error);
+      db.markFirebaseBlocked();
+    });
+
+    const savedCarts = localStorage.getItem('hau_hau_table_carts');
+    if (savedCarts) {
+      setTableCarts(JSON.parse(savedCarts));
+    }
+
+    return () => {
+      unsubAuth();
+    };
+  }, [usingFirebase, router, addToast]);
+
+  // 2. Initialize data subscriptions
+  useEffect(() => {
+    // Only subscribe to Firestore if we are in LocalStorage mode,
+    // or if we are in Firebase mode and the current user is authenticated.
+    if (usingFirebase && !currentUser) {
+      return;
+    }
+
+    // Subscribe to Menu
+    const unsubMenu = db.subscribeMenu((updatedMenu) => {
+      setMenu(updatedMenu);
+    });
+
+    // Subscribe to Orders
+    const unsubOrders = db.subscribeOrders((updatedOrders) => {
+      setOrders(updatedOrders);
+    });
+
+    // Subscribe to Staff Accounts
+    const unsubStaff = db.subscribeStaff((updatedStaff) => {
+      setStaffList(updatedStaff);
+    });
+
+    // Subscribe to Token Accounts
+    const unsubTokens = db.subscribeTokens((updatedTokens) => {
+      setTokens(updatedTokens);
+    });
+
+    // Subscribe to Token Transactions
+    const unsubTransactions = db.subscribeTokenTransactions((updatedTxs) => {
+      setTokenTransactions(updatedTxs);
+    });
+
+    // Subscribe to Settings
+    const unsubSettings = db.subscribeSettings((updatedSettings) => {
+      setSettings(updatedSettings);
+    });
+
+    // Subscribe to Audit Logs (Only for Owner or LocalStorage mode)
+    let unsubAuditLogs = () => {};
+    if (!usingFirebase || currentUser?.role === 'owner') {
+      unsubAuditLogs = db.subscribeAuditLogs((updatedLogs) => {
+        setAuditLogs(updatedLogs);
+      });
+    }
 
     return () => {
       unsubMenu();
@@ -264,10 +282,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubTransactions();
       unsubSettings();
       unsubAuditLogs();
-      unsubAuth();
-      clearTimeout(timer);
     };
-  }, [router, addToast, usingFirebase]);
+  }, [usingFirebase, currentUser]);
 
   // Save carts when they change
   useEffect(() => {
@@ -282,7 +298,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Map usernames to emails for Firebase Auth
     if (username === 'owner') {
-      email = 'owner@hauhau.com';
+      email = process.env.NEXT_PUBLIC_PRODUCTION_OWNER_EMAIL || 'cherukuridakshithsai@gmail.com';
     } else if (username === 'staff') {
       email = 'staff@hauhau.com';
     } else {
@@ -444,7 +460,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const firestoreFields: Record<string, string> = {};
         if (updatedFields.name) firestoreFields.name = updatedFields.name;
         if (updatedFields.emailOrPhone) firestoreFields.emailOrPhone = updatedFields.emailOrPhone;
-        if (updatedFields.password) firestoreFields.password = await hashPassword(updatedFields.password);
+        if (process.env.NODE_ENV !== 'production' && updatedFields.password) {
+          firestoreFields.password = await hashPassword(updatedFields.password);
+        }
 
         await updateDoc(userDocRef, firestoreFields);
 
@@ -605,6 +623,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const subtotal = currentCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+      const orderTotal = settings?.taxEnabled ? subtotal * 1.05 : subtotal;
       let extraOrderFields: Partial<Order> = {};
 
       if (paymentMode === 'tokens') {
@@ -621,7 +640,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return false;
         }
 
-        const tokensRequired = Math.round((subtotal / settings.tokenValueInRupees) * 100) / 100;
+        const balanceRupees = studentCard.balanceRupees || 0;
+        const amountPayable = Math.max(0, orderTotal - balanceRupees);
+        const tokensRequired = Math.ceil(amountPayable / settings.tokenValueInRupees);
+
         if (studentCard.tokens < tokensRequired) {
           addToast(`Insufficient tokens! Card has ${studentCard.tokens}, required: ${tokensRequired}`, 'error');
           setIsSubmittingOrder(false);
@@ -631,9 +653,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const orderId = 'HH-' + Math.floor(1000 + Math.random() * 9000);
 
         // Deduct tokens atomically
-        await db.deductTokensTransaction(
+        const result = await db.deductTokensTransaction(
           studentCard.id,
-          tokensRequired,
+          orderTotal,
           orderId,
           currentUser?.username || 'unknown',
           auth.currentUser?.uid || 'local',
@@ -644,14 +666,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           id: orderId,
           tokenCardNo,
           studentName: studentCard.name,
-          tokensDeducted: tokensRequired
+          tokensDeducted: result.tokensDeducted,
+          creditApplied: result.creditApplied,
+          creditReturned: result.creditReceived
         };
       }
 
       const createdOrder = await db.createOrder({
         tableNumber: activeTable,
         items: currentCart,
-        total: subtotal,
+        total: orderTotal,
         paymentMode,
         staffId: currentUser?.username || 'unknown',
         staffName: currentUser?.name || 'unknown',
@@ -666,7 +690,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         actorRole: currentUser?.role || 'staff',
         targetId: createdOrder.id,
         outletId: settings.outletId || 'main_outlet',
-        after: { total: subtotal, paymentMode, tableNumber: activeTable }
+        after: { total: orderTotal, paymentMode, tableNumber: activeTable }
       });
 
       // Clear cart for this table
@@ -724,6 +748,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await db.refundTokensTransaction(
             studentCard.id,
             order.tokensDeducted,
+            order.total,
             orderId,
             auth.currentUser?.uid || 'local',
             currentUser?.role || 'owner'
@@ -784,14 +809,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await deleteApp(secondaryApp);
 
         // Save doc in firestore
-        const createdStaff = await db.addStaffWithId(cred.user.uid, {
+        const staffDocData: any = {
           name: account.name,
           emailOrPhone: account.emailOrPhone,
           username: account.username.trim().toLowerCase(),
-          password: await hashPassword(account.password),
           status: 'active',
           outletId: settings.outletId || 'main_outlet'
-        });
+        };
+        if (process.env.NODE_ENV !== 'production') {
+          staffDocData.password = await hashPassword(account.password);
+        }
+
+        const createdStaff = await db.addStaffWithId(cred.user.uid, staffDocData);
 
         // Write audit log for staff created
         await db.addAuditLog({
@@ -974,7 +1003,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
 
       if (currentMonthTokensSold + account.tokens > limit) {
-        addToast(`Provision exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(2)} tokens`, 'error');
+        addToast(`Provision exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(0)} tokens`, 'error');
         return false;
       }
     }
@@ -1081,7 +1110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
 
       if (currentMonthTokensSold + tokensToAdd > limit) {
-        addToast(`Sale exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(2)} tokens`, 'error');
+        addToast(`Sale exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(0)} tokens`, 'error');
         return false;
       }
     }
@@ -1155,6 +1184,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await db.adjustTokensTransaction(
         studentId,
         targetTokens,
+        studentCard.balanceRupees || 0,
         reason,
         auth.currentUser?.uid || 'local',
         'owner'

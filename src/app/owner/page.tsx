@@ -29,7 +29,11 @@ import {
   X,
   ShieldCheckered,
   Gear,
+  PresentationChart,
+  BookOpen,
 } from '@phosphor-icons/react';
+import { InfoTag } from '@/components/InfoTag';
+import { DocsWorkspace } from '@/components/DocsWorkspace';
 
 export default function OwnerDashboardPage() {
   const router = useRouter();
@@ -53,10 +57,11 @@ export default function OwnerDashboardPage() {
   } = useApp();
 
   // Navigation Tabs for Command Center
-  const [activeWorkspace, setActiveWorkspace] = useState<'overview' | 'orders' | 'menu' | 'staff' | 'tokens' | 'audit' | 'settings' | 'profile'>('overview');
+  const [activeWorkspace, setActiveWorkspace] = useState<'overview' | 'orders' | 'menu' | 'staff' | 'tokens' | 'audit' | 'settings' | 'profile' | 'docs'>('overview');
   const [paymentModeFilter, setPaymentModeFilter] = useState<'all' | 'cash' | 'online' | 'tokens'>('all');
   const [isAddingMenuItem, setIsAddingMenuItem] = useState(false);
   const [activeOrderTab, setActiveOrderTab] = useState<'pending' | 'completed' | 'all'>('pending');
+  const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingToken, setEditingToken] = useState<TokenAccount | null>(null);
   const [historyToken, setHistoryToken] = useState<TokenAccount | null>(null);
@@ -186,7 +191,11 @@ export default function OwnerDashboardPage() {
 
   const tokenCollection = filteredByDateOrders
     .filter(o => o.paymentMode === 'tokens' && o.orderStatus !== 'cancelled')
-    .reduce((sum, o) => sum + o.total, 0);
+    .reduce((sum, o) => {
+      const tokenValue = settings?.tokenValueInRupees || 30;
+      const val = o.tokensDeducted !== undefined ? (o.tokensDeducted * tokenValue) : o.total;
+      return sum + val;
+    }, 0);
 
   const totalCollections = cashCollection + onlineCollection + tokenCollection;
 
@@ -365,13 +374,14 @@ export default function OwnerDashboardPage() {
     const tokenPct = (tokenCollection / totalCollections) * 100;
 
     return (
-      <div className="minimal-card p-5.5 rounded-xl flex flex-col gap-4 relative overflow-hidden bg-surface border border-border">
+      <div className="minimal-card p-5.5 rounded-xl flex flex-col gap-4 relative bg-surface border border-border">
         <div className="absolute -right-12 -top-12 w-24 h-24 bg-primary/5 rounded-full blur-xl pointer-events-none" />
 
         <div className="flex justify-between items-center relative z-10">
           <span className="text-xs font-bold text-foreground flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-primary" />
             Revenue Breakdown
+            <InfoTag text="Daily sales pool totals. Note: Token revenue represents physical token values received (tokens * conversion rate)." position="bottom" />
           </span>
           <span className="text-xs font-mono font-bold text-foreground bg-surface-header px-3 py-1 rounded-lg border border-border">
             Total Revenue: <span className="text-primary ml-1">₹{totalCollections.toFixed(2)}</span>
@@ -526,7 +536,7 @@ export default function OwnerDashboardPage() {
 
       {/* Mobile Nav Menu */}
       <nav className="md:hidden flex overflow-x-auto border-b border-border bg-surface-header/40 p-2 shrink-0 gap-1.5">
-        {(['overview', 'orders', 'menu', 'staff', 'tokens', 'audit', 'settings', 'profile'] as const).map((space) => {
+        {(['overview', 'orders', 'menu', 'staff', 'tokens', 'audit', 'settings', 'docs', 'profile'] as const).map((space) => {
           const isSelected = activeWorkspace === space;
           const mobileIcons: Record<string, React.ReactNode> = {
             overview: <SquaresFour  size={15} weight="duotone" />,
@@ -536,6 +546,7 @@ export default function OwnerDashboardPage() {
             tokens:   <CreditCard   size={15} weight="duotone" />,
             audit:    <ShieldCheckered size={15} weight="duotone" />,
             settings: <Gear          size={15} weight="duotone" />,
+            docs:     <BookOpen      size={15} weight="duotone" />,
             profile:  <UserCircle   size={15} weight="duotone" />,
           };
           const mobileLabels: Record<string, string> = {
@@ -546,6 +557,7 @@ export default function OwnerDashboardPage() {
             tokens: 'Tokens',
             audit: 'Audits',
             settings: 'Settings',
+            docs: 'Help',
             profile: 'Profile'
           };
           return (
@@ -567,22 +579,22 @@ export default function OwnerDashboardPage() {
 
       {/* Desktop Left Sidebar Container (keeps the spacer for the main content) */}
       <div className="hidden md:block relative w-[72px] shrink-0 h-screen z-50">
-        <aside className="group absolute top-0 left-0 h-full w-[72px] hover:w-64 transition-all duration-300 ease-in-out bg-surface-header border-r border-border flex flex-col justify-between py-6 px-3.5 overflow-hidden hover:shadow-[8px_0_24px_rgba(0,0,0,0.4)]">
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-center group-hover:justify-start gap-0 group-hover:gap-3">
+        <aside className="group absolute top-0 left-0 h-full w-[72px] hover:w-64 sidebar-container bg-surface-header border-r border-border flex flex-col justify-between py-6 px-3.5 overflow-hidden hover:shadow-[8px_0_24px_rgba(0,0,0,0.4)]">
+          <div className="flex flex-col gap-6 overflow-hidden flex-1">
+            <div className="flex items-center justify-start pl-1.5 shrink-0">
               <div className="w-8 h-8 shrink-0 bg-surface border border-border rounded-md flex items-center justify-center text-foreground font-bold text-sm">
                 HH
               </div>
-              <div className="hidden group-hover:block whitespace-nowrap overflow-hidden">
+              <div className="sidebar-label flex flex-col">
                 <h1 className="font-bold text-sm text-foreground leading-tight">Hau Hau</h1>
                 <span className="text-xs text-text-muted font-medium block mt-0.5">Control Center</span>
               </div>
             </div>
             
-            <hr className="border-border" />
+            <hr className="border-border shrink-0" />
             
-            <nav className="flex flex-col gap-1.5">
-              {(['overview', 'orders', 'menu', 'staff', 'tokens', 'audit', 'settings', 'profile'] as const).map((space) => {
+            <nav className="flex flex-col gap-1.5 overflow-y-auto flex-1 pr-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {(['overview', 'orders', 'menu', 'staff', 'tokens', 'audit', 'settings', 'docs', 'profile'] as const).map((space) => {
                 const isSelected = activeWorkspace === space;
                 const sidebarLabels: Record<string, { icon: React.ReactNode; text: string }> = {
                   overview: { icon: <SquaresFour  size={17} weight="duotone" />, text: 'Overview' },
@@ -592,20 +604,21 @@ export default function OwnerDashboardPage() {
                   tokens:   { icon: <CreditCard   size={17} weight="duotone" />, text: 'Token Cards' },
                   audit:    { icon: <ShieldCheckered size={17} weight="duotone" />, text: 'Audit Logs' },
                   settings: { icon: <Gear          size={17} weight="duotone" />, text: 'Outlet Settings' },
-                  profile:  { icon: <UserCircle   size={17} weight="duotone" />, text: 'Profile' },
+                  docs:     { icon: <BookOpen      size={17} weight="duotone" />, text: 'Help & Docs' },
+                  profile:  { icon: <UserCircle   size={17} weight="duotone" />, text: 'My Profile' },
                 };
                 return (
                   <button
                     key={space}
                     onClick={() => setActiveWorkspace(space)}
-                    className={`w-full h-10 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center group-hover:justify-start px-2 group-hover:px-3.5 gap-0 group-hover:gap-3.5 ${
+                    className={`w-full h-10 rounded-lg text-xs font-semibold cursor-pointer flex items-center justify-start px-3 transition-all duration-350 ${
                       isSelected
                         ? 'bg-primary text-white font-bold shadow-[0_4px_12px_rgba(224,123,57,0.15)]'
                         : 'text-text-muted hover:text-foreground hover:bg-surface-container/50'
                     }`}
                   >
                     <span className="shrink-0 w-5 flex items-center justify-center">{sidebarLabels[space].icon}</span>
-                    <span className="hidden group-hover:inline-block whitespace-nowrap overflow-hidden">
+                    <span className="sidebar-label">
                       {sidebarLabels[space].text}
                     </span>
                   </button>
@@ -614,23 +627,23 @@ export default function OwnerDashboardPage() {
             </nav>
           </div>
           
-          <div className="flex flex-col gap-4 mt-6">
+          <div className="flex flex-col gap-4 mt-6 shrink-0">
             <hr className="border-border" />
-            <div className="flex items-center justify-center group-hover:justify-start gap-0 group-hover:gap-3">
+            <div className="flex items-center justify-start pl-1.5">
               <div className="w-8 h-8 shrink-0 rounded-full bg-surface-container border border-border flex items-center justify-center text-[10px] font-bold text-foreground">
                 {currentUser?.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2) || 'S'}
               </div>
-              <div className="hidden group-hover:flex flex-col whitespace-nowrap overflow-hidden">
+              <div className="sidebar-label flex flex-col">
                 <span className="text-xs font-bold text-foreground">{currentUser?.name || 'Sarah'}</span>
                 <span className="text-[9px] text-text-muted">Restaurant Owner</span>
               </div>
             </div>
             <button
               onClick={logout}
-              className="minimal-btn-secondary w-full h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all flex items-center justify-center group-hover:justify-start px-2 group-hover:px-3.5 gap-0 group-hover:gap-3"
+              className="minimal-btn-secondary w-full h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all flex items-center justify-start px-3"
             >
-                            <span className="shrink-0 w-5 flex items-center justify-center"><SignOut size={17} weight="duotone" /></span>
-              <span className="hidden group-hover:inline-block whitespace-nowrap overflow-hidden">
+              <span className="shrink-0 w-5 flex items-center justify-center"><SignOut size={17} weight="duotone" /></span>
+              <span className="sidebar-label">
                 Log Out
               </span>
             </button>
@@ -645,7 +658,7 @@ export default function OwnerDashboardPage() {
         <header className="flex justify-between items-center border-b border-border pb-4 shrink-0">
           <div>
             <h1 className="text-lg font-bold text-foreground capitalize">
-              {activeWorkspace === 'tokens' ? 'Token Cards' : activeWorkspace === 'profile' ? 'Profile & Settings' : activeWorkspace}
+              {activeWorkspace === 'tokens' ? 'Token Cards' : activeWorkspace === 'profile' ? 'Profile & Settings' : activeWorkspace === 'docs' ? 'Help & Documentation' : activeWorkspace}
             </h1>
             <p className="text-xs text-text-muted mt-0.5">Welcome back, {currentUser?.name || 'Sarah'}. Here is your operations status.</p>
           </div>
@@ -697,6 +710,16 @@ export default function OwnerDashboardPage() {
                   }}
                   className="bg-surface-header border border-border px-3 py-1.5 text-xs font-mono font-bold rounded-lg text-foreground focus:outline-none focus:border-primary w-40"
                 />
+              )}
+              {activeWorkspace === 'orders' && (
+                <button
+                  type="button"
+                  onClick={() => setIsRevenueModalOpen(true)}
+                  className="px-3.5 py-1.5 text-xs font-bold rounded-lg border border-primary/20 text-primary bg-primary/5 hover:bg-primary/10 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <PresentationChart size={15} weight="duotone" />
+                  Revenue Breakdown
+                </button>
               )}
             </div>
           </div>
@@ -812,8 +835,6 @@ export default function OwnerDashboardPage() {
           {/* B. ORDERS WORKSPACE */}
           {activeWorkspace === 'orders' && (
             <div className="flex flex-col gap-6">
-              {renderDistributionChart()}
-
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-4 border-b border-border pb-1">
                   <div className="flex justify-between items-center">
@@ -882,8 +903,18 @@ export default function OwnerDashboardPage() {
                             <th className="p-3.5 font-semibold">Table</th>
                             <th className="p-3.5 font-semibold">Items</th>
                             <th className="p-3.5 font-semibold">Total</th>
-                            <th className="p-3.5 font-semibold">Status</th>
-                            <th className="p-3.5 pr-5 font-semibold text-right">Actions</th>
+                            <th className="p-3.5 font-semibold">
+                              <span className="flex items-center gap-1">
+                                Status
+                                <InfoTag text="Pending: order in preparation. Completed: finalized order. Cancelled: refunded order (cannot be completed again)." position="bottom" />
+                              </span>
+                            </th>
+                            <th className="p-3.5 pr-5 font-semibold text-right">
+                              <span className="flex items-center justify-end gap-1">
+                                Actions
+                                <InfoTag text="Complete: finalize order. Cancel: cancel order and refund tokens/credit. Revert: change a completed order back to pending (allowed within 1 hour)." position="bottom-right" />
+                              </span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border bg-surface-container/10">
@@ -951,15 +982,24 @@ export default function OwnerDashboardPage() {
                                         </>
                                       )}
 
-                                      {order.orderStatus === 'completed' && (
-                                        <button
-                                          onClick={() => handleStatusChange(order.id, 'pending')}
-                                          className="border border-primary/20 hover:bg-primary/5 text-primary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                          title="Revert to Pending"
-                                        >
-                                          Revert
-                                        </button>
-                                      )}
+                                      {order.orderStatus === 'completed' && (() => {
+                                         const completedTime = (order.completedAt ? new Date(order.completedAt) : new Date(order.createdAt)).getTime();
+                                         const now = new Date().getTime();
+                                         const diffHours = (now - completedTime) / (1000 * 60 * 60);
+                                         const isRevertable = diffHours <= 1;
+
+                                         if (!isRevertable) return null;
+
+                                         return (
+                                           <button
+                                             onClick={() => handleStatusChange(order.id, 'pending')}
+                                             className="border border-primary/20 hover:bg-primary/5 text-primary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                             title="Revert to Pending"
+                                           >
+                                             Revert
+                                           </button>
+                                         );
+                                       })()}
                                     </td>
                                   </tr>
                                 </React.Fragment>
@@ -1312,7 +1352,12 @@ export default function OwnerDashboardPage() {
                             <th className="p-3.5 w-36">Action</th>
                             <th className="p-3.5 w-32">Actor</th>
                             <th className="p-3.5 w-28">Target ID</th>
-                            <th className="p-3.5">Details / Changes</th>
+                            <th className="p-3.5 border-none">
+                              <span className="flex items-center gap-1">
+                                Details / Changes
+                                <InfoTag text="Immutable changelog showing recharged tokens, deducted order tokens, cancelled order reversals, or manual balance corrections." position="bottom" />
+                              </span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -1331,22 +1376,50 @@ export default function OwnerDashboardPage() {
                             }
 
                             let details = '';
-                            if (log.action === 'tokenRecharged' && log.after) {
+                            if (log.action === 'tokenRecharged' && log.before != null && log.after != null) {
+                              const recharged = Math.round(log.after.tokens - log.before.tokens);
+                              details = `Recharged +${recharged} tokens (Balance: ${log.before.tokens} → ${log.after.tokens})`;
+                            } else if (log.action === 'tokenRecharged' && log.after) {
                               details = `Recharged +${log.after.tokens} tokens`;
-                            } else if (log.action === 'tokenDeducted' && log.after) {
-                              details = `Deducted -${log.after.tokens} tokens for Order #${log.after.orderId}`;
-                            } else if (log.action === 'tokenRefunded' && log.after) {
-                              details = `Refunded +${log.after.tokens} tokens for Cancelled Order #${log.after.orderId}`;
+                            } else if (log.action === 'tokenDeducted' && log.before != null && log.after != null) {
+                              const deducted = Math.round(log.before.tokens - log.after.tokens);
+                              details = `Deducted ${deducted} tokens for Order #${log.after.orderId || log.before.orderId}`;
+                            } else if (log.action === 'tokenRefunded' && log.before != null && log.after != null) {
+                              const refunded = Math.round(log.after.tokens - log.before.tokens);
+                              details = `Refunded +${refunded} tokens for Cancelled Order #${log.after.orderId || log.before.orderId}`;
                             } else if (log.action === 'tokenAdjusted' && log.before && log.after) {
-                              details = `Manual correction: ${log.before.tokens} -> ${log.after.tokens}`;
+                              const tokensBefore = log.before.tokens;
+                              const tokensAfter = log.after.tokens;
+                              const creditBefore = log.before.balanceRupees || 0;
+                              const creditAfter = log.after.balanceRupees || 0;
+                              details = `Manual balance correction: ${tokensBefore} → ${tokensAfter} tokens, ₹${creditBefore} → ₹${creditAfter} credit${log.after.reason ? ` (${log.after.reason})` : ''}`;
                             } else if (log.action === 'orderCreated' && log.after) {
-                              details = `Placed order for Table ${log.after.tableNumber} (Total: ₹${log.after.total})`;
+                              details = `Order placed for Table ${log.after.tableNumber} · ₹${log.after.total} via ${log.after.paymentMode || 'cash'}`;
+                            } else if (log.action === 'orderCompleted' && log.before) {
+                              details = `Order marked as completed`;
+                            } else if (log.action === 'orderCancelled' && log.before) {
+                              details = `Order cancelled (was: ${log.before.orderStatus})`;
+                            } else if (log.action === 'staffCreated' && log.after) {
+                              details = `New staff account: ${log.after.name || log.after.username || ''}`;
+                            } else if (log.action === 'staffDeactivated' && log.before) {
+                              details = `Staff deactivated (was: ${log.before.status})`;
+                            } else if (log.action === 'staffRemoved') {
+                              details = `Staff account permanently removed`;
+                            } else if (log.action === 'menuItemCreated' && log.after) {
+                              details = `Added "${log.after.name}" at ₹${log.after.price}`;
+                            } else if (log.action === 'menuItemUpdated' && log.before && log.after) {
+                              const changes: string[] = [];
+                              if (log.after.name && log.after.name !== log.before.name) changes.push(`Name: ${log.before.name} → ${log.after.name}`);
+                              if (log.after.price !== undefined && log.after.price !== log.before.price) changes.push(`Price: ₹${log.before.price} → ₹${log.after.price}`);
+                              if (log.after.available !== undefined && log.after.available !== log.before.available) changes.push(`${log.after.available ? 'Set available' : 'Set unavailable'}`);
+                              if (log.after.category && log.after.category !== log.before.category) changes.push(`Category: ${log.before.category} → ${log.after.category}`);
+                              details = changes.length > 0 ? changes.join(' · ') : 'Menu item updated';
+                            } else if (log.action === 'menuItemDeleted') {
+                              details = `Menu item removed`;
                             } else if (log.action === 'monthlyLimitChanged' && log.before && log.after) {
-                              details = `Limit adjusted: ${log.before.monthlyTokenLimit} -> ${log.after.monthlyTokenLimit} tokens`;
-                            } else if (log.action === 'settingsUpdated' && log.after) {
+                              details = `Monthly token limit: ${log.before.monthlyTokenLimit} → ${log.after.monthlyTokenLimit} tokens`;
+                            } else if (log.action === 'settingsUpdated') {
                               details = `Outlet properties or conversion rates modified`;
-                            } else if (log.before || log.after) {
-                              details = JSON.stringify(log.after || log.before);
                             } else {
                               details = 'N/A';
                             }
@@ -1544,6 +1617,11 @@ export default function OwnerDashboardPage() {
             <ProfileSection />
           )}
 
+          {/* I. HELP & DOCS WORKSPACE */}
+          {activeWorkspace === 'docs' && (
+            <DocsWorkspace />
+          )}
+
         </div>
       </main>
 
@@ -1709,6 +1787,42 @@ export default function OwnerDashboardPage() {
         </div>
       )}
 
+      {/* Revenue Breakdown Modal popup */}
+      {isRevenueModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fade-in" onClick={() => setIsRevenueModalOpen(false)}>
+          <div 
+            className="bg-surface border border-border w-full max-w-2xl max-h-[90vh] rounded-xl overflow-hidden flex flex-col shadow-2xl animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-surface-header/80 px-5 py-4 border-b border-border flex justify-between items-center shrink-0">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-text-muted">Analytics Ledger</span>
+                <span className="text-sm font-bold text-foreground mt-0.5">Revenue Breakdown</span>
+              </div>
+              <button 
+                onClick={() => setIsRevenueModalOpen(false)}
+                className="text-[11px] text-text-muted hover:text-foreground font-bold transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <X size={14} weight="bold" /> Close
+              </button>
+            </div>
+
+            <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-6">
+              {renderDistributionChart()}
+            </div>
+            
+            <div className="bg-surface-header/80 px-5 py-3.5 border-t border-border flex justify-end shrink-0">
+              <button 
+                onClick={() => setIsRevenueModalOpen(false)}
+                className="minimal-btn-secondary px-4 py-2.5 h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 2. Order Details Modal popup */}
       {selectedOrder && (
         <OrderDetailsModal 
@@ -1778,7 +1892,10 @@ export default function OwnerDashboardPage() {
                 </div>
                 <div className="bg-surface-container/40 border border-border rounded-xl p-4 flex flex-col gap-3">
                   <div>
-                    <h4 className="text-xs font-bold text-foreground">Set Monthly Token Limit</h4>
+                    <h4 className="text-xs font-bold text-foreground flex items-center">
+                      Set Monthly Token Limit
+                      <InfoTag text="Sets the maximum number of tokens this operator can sell or issue in a calendar month." position="top" />
+                    </h4>
                     <p className="text-[10px] text-text-muted mt-0.5">Restrict how many tokens this operator can sell per calendar month.</p>
                   </div>
                   <div className="flex gap-3 items-end">
