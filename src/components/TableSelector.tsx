@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { User } from '@phosphor-icons/react';
 
 export function TableSelector() {
   const { activeTable, selectActiveTable, tableCarts } = useApp();
@@ -10,9 +11,12 @@ export function TableSelector() {
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (customTable.trim()) {
-      const formattedTable = customTable.toLowerCase().startsWith('table') 
-        ? customTable.trim()
-        : `Table ${customTable.trim()}`;
+      const trimmed = customTable.trim();
+      const formattedTable = trimmed.toLowerCase() === 'self'
+        ? 'Self'
+        : (trimmed.toLowerCase().startsWith('table') 
+            ? trimmed
+            : `Table ${trimmed}`);
       
       selectActiveTable(formattedTable);
       setCustomTable('');
@@ -27,7 +31,7 @@ export function TableSelector() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
         <div>
           <h2 className="text-base text-foreground font-bold">Select a Table</h2>
-          <p className="text-xs text-text-muted mt-1">Tap a table to start taking an order</p>
+          <p className="text-xs text-text-muted mt-1">Tap a table or select self service to start taking an order</p>
         </div>
         
         {/* Custom Input */}
@@ -48,59 +52,121 @@ export function TableSelector() {
         </form>
       </div>
 
-      {/* Grid of quick tables */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 relative z-10">
-        {quickTables.map((table) => {
-          const isActive = activeTable === table;
-          const cart = tableCarts[table] || [];
-          const hasItems = cart.length > 0;
-          const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-          const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-          
-          let borderClass = 'border-border bg-surface/20 hover:border-text-muted/30 hover:bg-surface/40';
-          let textClass = 'text-text-muted';
-          let statusLight = 'bg-border';
+      {/* Grid of quick tables and Self option */}
+      <div className="flex flex-col lg:flex-row gap-3 relative z-10 items-stretch">
+        {/* Self Option */}
+        <div className="lg:w-28 shrink-0 flex">
+          {(() => {
+            const table = 'Self';
+            const isActive = activeTable === table;
+            const cart = tableCarts[table] || [];
+            const hasItems = cart.length > 0;
+            const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+            const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            
+            let borderClass = 'border-border bg-surface/20 hover:border-text-muted/30 hover:bg-surface/40';
+            let textClass = 'text-text-muted';
+            let statusLight = 'bg-border';
 
-          if (isActive) {
-            borderClass = 'border-primary bg-primary/5 shadow-[0_4px_20px_rgba(224,123,57,0.08)]';
-            textClass = 'text-foreground font-bold';
-            statusLight = 'bg-primary animate-pulse-ring';
-          } else if (hasItems) {
-            borderClass = 'border-primary/30 bg-primary/[0.02] hover:border-primary/50 hover:bg-primary/[0.04]';
-            textClass = 'text-primary font-bold';
-            statusLight = 'bg-primary';
-          }
+            if (isActive) {
+              borderClass = 'border-primary bg-primary/5 shadow-[0_4px_20px_rgba(224,123,57,0.08)]';
+              textClass = 'text-foreground font-bold';
+              statusLight = 'bg-primary animate-pulse-ring';
+            } else if (hasItems) {
+              borderClass = 'border-primary/30 bg-primary/[0.02] hover:border-primary/50 hover:bg-primary/[0.04]';
+              textClass = 'text-primary font-bold';
+              statusLight = 'bg-primary';
+            }
 
-          return (
-            <button
-              key={table}
-              onClick={() => selectActiveTable(table)}
-              className={`h-16 min-w-[80px] flex flex-col justify-between p-3 rounded-lg border text-left transition-all duration-300 relative cursor-pointer group ${borderClass} ${textClass}`}
-            >
-              <div className="flex justify-between items-center w-full">
-                <span className="font-semibold text-xs leading-none group-hover:text-foreground transition-colors">
-                  {table}
-                </span>
-                <span className={`w-1.5 h-1.5 rounded-full ${statusLight} transition-all duration-300`} />
-              </div>
-              
-              <div className="text-[9px] font-bold">
-                {isActive ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#71d384] font-mono">
-                      {hasItems ? `₹${cartTotal.toFixed(0)} · ${cartItemsCount} item${cartItemsCount !== 1 ? 's' : ''}` : 'Ready'}
-                    </span>
-                    <span className="bg-[#1b3821] text-[#71d384] text-[8px] px-1 py-0.2 rounded border border-[#2e7d32]/20 font-bold scale-90 origin-right">Active</span>
-                  </div>
-                ) : hasItems ? (
-                  <span className="text-primary font-mono">₹{cartTotal.toFixed(0)} · {cartItemsCount} item{cartItemsCount !== 1 ? 's' : ''}</span>
-                ) : (
-                  <span className="text-text-muted/65">Ready</span>
-                )}
-              </div>
-            </button>
-          );
-        })}
+            return (
+              <button
+                onClick={() => selectActiveTable(table)}
+                className={`w-full min-h-[64px] flex flex-col justify-between p-3 rounded-lg border text-left transition-all duration-300 relative cursor-pointer group ${borderClass} ${textClass}`}
+              >
+                <div className="flex justify-between items-center w-full">
+                  <span className="font-semibold text-xs leading-none group-hover:text-foreground transition-colors flex items-center gap-1">
+                    <User size={13} weight="duotone" className="shrink-0" />
+                    Self
+                  </span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${statusLight} transition-all duration-300`} />
+                </div>
+                
+                <div className="text-[9px] font-bold">
+                  {isActive ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#71d384] font-mono">
+                        {hasItems ? `₹${cartTotal.toFixed(0)} · ${cartItemsCount} item${cartItemsCount !== 1 ? 's' : ''}` : 'Ready'}
+                      </span>
+                      <span className="bg-[#1b3821] text-[#71d384] text-[8px] px-1 py-0.2 rounded border border-[#2e7d32]/20 font-bold scale-90 origin-right">Active</span>
+                    </div>
+                  ) : hasItems ? (
+                    <span className="text-primary font-mono">₹{cartTotal.toFixed(0)} · {cartItemsCount} item{cartItemsCount !== 1 ? 's' : ''}</span>
+                  ) : (
+                    <span className="text-text-muted/65">Self Service</span>
+                  )}
+                </div>
+              </button>
+            );
+          })()}
+        </div>
+
+        {/* Vertical divider */}
+        <div className="hidden lg:block w-px bg-border/60 self-stretch my-1" />
+
+        {/* Grid of quick tables */}
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          {quickTables.map((table) => {
+            const isActive = activeTable === table;
+            const cart = tableCarts[table] || [];
+            const hasItems = cart.length > 0;
+            const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+            const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            
+            let borderClass = 'border-border bg-surface/20 hover:border-text-muted/30 hover:bg-surface/40';
+            let textClass = 'text-text-muted';
+            let statusLight = 'bg-border';
+
+            if (isActive) {
+              borderClass = 'border-primary bg-primary/5 shadow-[0_4px_20px_rgba(224,123,57,0.08)]';
+              textClass = 'text-foreground font-bold';
+              statusLight = 'bg-primary animate-pulse-ring';
+            } else if (hasItems) {
+              borderClass = 'border-primary/30 bg-primary/[0.02] hover:border-primary/50 hover:bg-primary/[0.04]';
+              textClass = 'text-primary font-bold';
+              statusLight = 'bg-primary';
+            }
+
+            return (
+              <button
+                key={table}
+                onClick={() => selectActiveTable(table)}
+                className={`h-16 min-w-[80px] flex flex-col justify-between p-3 rounded-lg border text-left transition-all duration-300 relative cursor-pointer group ${borderClass} ${textClass}`}
+              >
+                <div className="flex justify-between items-center w-full">
+                  <span className="font-semibold text-xs leading-none group-hover:text-foreground transition-colors">
+                    {table}
+                  </span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${statusLight} transition-all duration-300`} />
+                </div>
+                
+                <div className="text-[9px] font-bold">
+                  {isActive ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#71d384] font-mono">
+                        {hasItems ? `₹${cartTotal.toFixed(0)} · ${cartItemsCount} item${cartItemsCount !== 1 ? 's' : ''}` : 'Ready'}
+                      </span>
+                      <span className="bg-[#1b3821] text-[#71d384] text-[8px] px-1 py-0.2 rounded border border-[#2e7d32]/20 font-bold scale-90 origin-right">Active</span>
+                    </div>
+                  ) : hasItems ? (
+                    <span className="text-primary font-mono">₹{cartTotal.toFixed(0)} · {cartItemsCount} item{cartItemsCount !== 1 ? 's' : ''}</span>
+                  ) : (
+                    <span className="text-text-muted/65">Ready</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
       
       {/* Active Selection Display */}
@@ -116,7 +182,7 @@ export function TableSelector() {
             onClick={() => selectActiveTable(null)}
             className="text-xs text-text-muted hover:text-error transition-colors cursor-pointer font-bold"
           >
-            Close Table
+            {activeTable === 'Self' ? 'Close Session' : 'Close Table'}
           </button>
         </div>
       )}

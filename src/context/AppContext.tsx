@@ -637,7 +637,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     });
 
-    addToast(`Added ${item.name} to Table ${activeTable}`, 'success');
+    addToast(`Added ${item.name} to ${activeTable === 'Self' ? 'Self Service' : `Table ${activeTable}`}`, 'success');
   };
 
   const updateCartQuantity = (itemId: string, change: number) => {
@@ -690,7 +690,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('hau_hau_table_carts', JSON.stringify(parsed));
     }
     
-    addToast(`Cart cleared for Table ${table}`, 'info');
+    addToast(`Cart cleared for ${table === 'Self' ? 'Self Service' : `Table ${table}`}`, 'info');
   };
 
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
@@ -805,7 +805,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem('hau_hau_table_carts', JSON.stringify(parsed));
       }
 
-      addToast(`Order sent successfully for Table ${activeTable}!`, 'success');
+      addToast(`Order sent successfully for ${activeTable === 'Self' ? 'Self Service' : `Table ${activeTable}`}!`, 'success');
       setIsSubmittingOrder(false);
       return true;
     } catch (err: any) {

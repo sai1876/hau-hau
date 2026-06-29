@@ -120,7 +120,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
   const handleClear = () => {
     if (!activeTable) return;
     confirmAction(
-      `Are you sure you want to clear the cart for ${activeTable}?`,
+      `Are you sure you want to clear the cart for ${activeTable === 'Self' ? 'Self Service' : activeTable}?`,
       () => clearTableCart(activeTable)
     );
   };
@@ -149,7 +149,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse-ring" />
           <span className="text-xs text-foreground font-bold">
-            Order — {activeTable}
+            Order — {activeTable === 'Self' ? 'Self Service' : activeTable}
           </span>
         </div>
         
