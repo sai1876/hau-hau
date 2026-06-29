@@ -13,7 +13,7 @@ import {
   onAuthStateChanged,
   updatePassword
 } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { hashPassword } from '../utils/crypto';
@@ -66,6 +66,8 @@ interface AppContextType {
   settings: Settings;
   auditLogs: AuditLog[];
   updateSettings: (updatedFields: Partial<Settings>) => Promise<boolean>;
+  usingFirebase: boolean;
+  syncDataToCloud: () => Promise<boolean>;
   
   // Toasts
   addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -179,10 +181,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        const email = firebaseUser.email;
+        const isOwnerEmail = email === 'cherukuridakshithsai@gmail.com' ||
+                             email === 'owner-demo@hauhau.com' ||
+                             email === 'tharun@gmail.com' ||
+                             email === 'tharun@gamil.com';
         try {
           const docRef = doc(firestore, 'staff', firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
+          let docSnap;
+          try {
+            docSnap = await getDoc(docRef);
+          } catch (readErr) {
+            // If it's an owner email and read failed (likely due to missing document causing rule violation),
+            // we will create the profile document. Otherwise, we rethrow the read error.
+            if (isOwnerEmail) {
+              console.log("Owner profile missing or unreadable. Self-healing...");
+              const ownerProfile = {
+                id: firebaseUser.uid,
+                name: firebaseUser.displayName || email?.split('@')[0] || 'Owner',
+                emailOrPhone: email || '',
+                username: email?.split('@')[0] || 'owner',
+                role: 'owner',
+                status: 'active',
+                outletId: 'main_outlet',
+                isDemo: email?.includes('demo') || false
+              };
+              await setDoc(docRef, ownerProfile);
+              docSnap = await getDoc(docRef);
+            } else {
+              throw readErr;
+            }
+          }
+
+          if (docSnap && docSnap.exists()) {
             const profile = docSnap.data() as StaffAccount;
             const role = (profile.role || (profile.username === 'owner' ? 'owner' : 'staff')) as 'staff' | 'owner';
             
@@ -207,9 +238,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 router.push('/staff');
               }
             }
+          } else {
+            // Profile snap exists but is empty, and it is an owner email
+            if (isOwnerEmail) {
+              const ownerProfile = {
+                id: firebaseUser.uid,
+                name: firebaseUser.displayName || email?.split('@')[0] || 'Owner',
+                emailOrPhone: email || '',
+                username: email?.split('@')[0] || 'owner',
+                role: 'owner',
+                status: 'active',
+                outletId: 'main_outlet',
+                isDemo: email?.includes('demo') || false
+              };
+              await setDoc(docRef, ownerProfile);
+              
+              setCurrentUser({
+                name: ownerProfile.name,
+                role: 'owner',
+                username: ownerProfile.username
+              });
+
+              if (window.location.pathname === '/login') {
+                router.push('/owner');
+              }
+            } else {
+              addToast('Access denied: Staff profile not found in database.', 'error');
+              await signOut(auth);
+              setCurrentUser(null);
+            }
           }
         } catch (e) {
           console.warn('Error fetching auth user profile:', e);
+          addToast('Access denied: Failed to load profile or permissions missing.', 'error');
+          await signOut(auth);
+          setCurrentUser(null);
         }
       } else {
         setCurrentUser(null);
@@ -1309,6 +1372,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const syncDataToCloud = async (): Promise<boolean> => {
+    db.resetFirebaseBlocked();
+    const isConfigured = db.isFirebaseConfigured();
+    setUsingFirebase(isConfigured);
+
+    if (!isConfigured) {
+      addToast('Cannot sync: Firebase is not configured in environment variables.', 'error');
+      return false;
+    }
+
+    addToast('Starting database synchronization...', 'info');
+
+    try {
+      const stats = await db.syncLocalStorageToFirestore();
+      
+      let summaryMsg = 'Sync complete: ';
+      const parts = [];
+      if (stats.settings > 0) parts.push(`${stats.settings} settings`);
+      if (stats.menu > 0) parts.push(`${stats.menu} menu items`);
+      if (stats.staff > 0) parts.push(`${stats.staff} staff`);
+      if (stats.tokens > 0) parts.push(`${stats.tokens} tokens`);
+      if (stats.transactions > 0) parts.push(`${stats.transactions} transactions`);
+      if (stats.orders > 0) parts.push(`${stats.orders} orders`);
+      if (stats.auditLogs > 0) parts.push(`${stats.auditLogs} audit logs`);
+      
+      if (parts.length > 0) {
+        summaryMsg += parts.join(', ');
+      } else {
+        summaryMsg += 'database is already up to date.';
+      }
+
+      if (stats.errors.length > 0) {
+        addToast(`${summaryMsg} (with some write restrictions)`, 'warning');
+      } else {
+        addToast(summaryMsg, 'success');
+      }
+      return true;
+    } catch (err: any) {
+      console.error("Sync data failed:", err);
+      addToast(err.message || 'Synchronization failed.', 'error');
+      return false;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1319,6 +1426,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         tokenTransactions,
         settings,
         auditLogs,
+        usingFirebase,
+        syncDataToCloud,
         currentUser,
         activeTable,
         tableCarts,

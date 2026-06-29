@@ -11,7 +11,7 @@ import ProfileSection from '@/components/ProfileSection';
 import TokenAccountForm from '@/components/TokenAccountForm';
 import { TokenAccount } from '@/types';
 import { TokenIcon } from '@/components/TokenIcon';
-import { ForkKnife, CreditCard, ClipboardText, MagnifyingGlass, GearSix, BookOpen } from '@phosphor-icons/react';
+import { ForkKnife, CreditCard, ClipboardText, MagnifyingGlass, GearSix, BookOpen, Sparkle, X, Clock } from '@phosphor-icons/react';
 import { Pagination } from '@/components/Pagination';
 import { InfoTag } from '@/components/InfoTag';
 import { DocsWorkspace } from '@/components/DocsWorkspace';
@@ -47,6 +47,51 @@ export default function StaffDashboardPage() {
   const [selectedStudent, setSelectedStudent] = useState<TokenAccount | null>(null);
   const [rechargeTokens, setRechargeTokens] = useState('');
   const [rechargeAmount, setRechargeAmount] = useState('');
+
+  // Grok AI States
+  const [grokApiKey, setGrokApiKey] = useState('');
+  const [isOptimizingQueue, setIsOptimizingQueue] = useState(false);
+  const [queueOptimization, setQueueOptimization] = useState<any>(null);
+  const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setGrokApiKey(localStorage.getItem('hau_hau_grok_api_key') || '');
+    }
+  }, []);
+
+  const handleOptimizeQueue = async () => {
+    setIsOptimizingQueue(true);
+    try {
+      const pendingOrders = orders.filter(o => o.orderStatus === 'pending');
+      const queueSummary = pendingOrders.map(o => ({
+        id: o.id,
+        tableNumber: o.tableNumber,
+        items: o.items.map(i => ({ name: i.name, quantity: i.quantity })),
+      }));
+
+      const res = await fetch('/api/grok', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-grok-api-key': grokApiKey,
+        },
+        body: JSON.stringify({
+          action: 'queue-optimize',
+          data: queueSummary,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Queue optimization failed');
+      const data = await res.json();
+      setQueueOptimization(data);
+      setIsQueueModalOpen(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsOptimizingQueue(false);
+    }
+  };
 
   // Dynamic category calculations
   const menuCategories = Array.from(new Set(menu.map(item => item.category))).filter(Boolean);
@@ -271,6 +316,62 @@ export default function StaffDashboardPage() {
         {/* 1. POS TERMINAL WORKSPACE */}
         {activeWorkspace === 'pos' && (
           <div className="flex-1 flex flex-col gap-4 overflow-hidden animate-slide-in">
+            {/* Kitchen Pacing Banner */}
+            {(() => {
+              const pendingCount = orders ? orders.filter(o => o.orderStatus === 'pending').length : 0;
+              let paceColor = "border-success/30 bg-success/5 text-success-text";
+              let paceText = "Optimal (prep times as normal)";
+              let delayText = "";
+              let bulletColor = "bg-success";
+
+              if (pendingCount >= 3 && pendingCount <= 5) {
+                paceColor = "border-warning/30 bg-warning/5 text-warning-text";
+                paceText = "Busy";
+                delayText = "(+2-3m dynamic delay applied)";
+                bulletColor = "bg-warning";
+              } else if (pendingCount > 5) {
+                paceColor = "border-error/30 bg-error/5 text-error-text";
+                paceText = "Backed Up";
+                delayText = "(+5-7m heavy delay applied)";
+                bulletColor = "bg-error";
+              }
+
+              return (
+                <div className={`border p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shrink-0 transition-all ${paceColor}`}>
+                  <div className="flex items-center gap-2 font-semibold">
+                    <span className={`w-2 h-2 rounded-full animate-ping ${bulletColor}`} />
+                    <span>Kitchen Load: <strong className="font-bold">{pendingCount} pending orders</strong></span>
+                    <span className="opacity-75">—</span>
+                    <span className="flex items-center gap-1.5">
+                      Pace: <strong className="font-bold uppercase tracking-wider">{paceText}</strong>
+                      {delayText && <span className="text-[10px] font-mono opacity-80">{delayText}</span>}
+                    </span>
+                  </div>
+
+                  {pendingCount > 1 && (
+                    <button
+                      type="button"
+                      onClick={handleOptimizeQueue}
+                      disabled={isOptimizingQueue}
+                      className="minimal-btn-primary px-3 py-1.5 h-8 min-h-0 text-[10px] font-bold rounded-lg cursor-pointer disabled:opacity-50 flex items-center gap-1.5 self-start sm:self-auto"
+                    >
+                      {isOptimizingQueue ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Optimizing...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkle size={12} weight="fill" />
+                          AI Optimize Prep Steps
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Table Selector (Top zone - dynamic height) */}
             <div className="shrink-0">
               <TableSelector />
@@ -818,6 +919,65 @@ export default function StaffDashboardPage() {
           <div className="bg-surface max-h-[85vh] rounded-t-xl overflow-hidden flex flex-col animate-slide-in">
             <div className="h-full flex-1">
               <CartPanel onClose={() => setIsMobileCartOpen(false)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Queue Optimizer Modal */}
+      {isQueueModalOpen && queueOptimization && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fade-in" onClick={() => setIsQueueModalOpen(false)}>
+          <div 
+            className="bg-surface border border-border w-full max-w-lg max-h-[90vh] rounded-xl overflow-hidden flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-surface-header/80 px-5 py-4 border-b border-border flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded bg-primary/10 flex items-center justify-center text-primary">
+                  <Sparkle size={15} weight="fill" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-text-muted">Kitchen Intelligence</span>
+                  <span className="text-sm font-bold text-foreground mt-0.5">AI Queue Optimizer</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsQueueModalOpen(false)}
+                className="text-xs text-text-muted hover:text-foreground font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex flex-col gap-5 text-xs">
+              {/* Batching recommendations */}
+              <div className="flex flex-col gap-2.5">
+                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Suggested Cook Batching</h4>
+                <div className="flex flex-col gap-2.5">
+                  {queueOptimization.batchingSuggestions?.map((sug: any, idx: number) => (
+                    <div key={idx} className="p-3.5 bg-primary/5 border border-primary/15 rounded-xl flex flex-col gap-1 text-xs">
+                      <span className="font-bold text-foreground flex items-center gap-1.5 font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                        {sug.title}
+                      </span>
+                      <p className="text-[11px] text-text-muted leading-relaxed mt-0.5 font-semibold">{sug.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Prep sequence steps */}
+              <div className="flex flex-col gap-2.5 border-t border-border pt-4">
+                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Optimized Preparation Steps</h4>
+                <div className="flex flex-col gap-2 bg-surface-container/20 border border-border p-4 rounded-xl">
+                  {queueOptimization.optimizedSequence?.map((step: string, idx: number) => (
+                    <div key={idx} className="flex items-start gap-2.5 py-1 text-xs font-semibold text-text-muted">
+                      <span className="text-primary font-bold">{idx + 1}.</span>
+                      <p className="leading-relaxed">{step.replace(/^\d+\.\s*/, '')}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

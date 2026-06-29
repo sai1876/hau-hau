@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { TokenIcon } from './TokenIcon';
 
 export function StaffAccountForm() {
-  const { createNewStaff } = useApp();
+  const { createNewStaff, addToast } = useApp();
 
   const [name, setName] = useState('');
   const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -14,6 +14,11 @@ export function StaffAccountForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !emailOrPhone || !username || !password) return;
+
+    if (password.trim().length < 6) {
+      addToast('Password must be at least 6 characters long.', 'error');
+      return;
+    }
 
     const parsedLimit = parseInt(monthlyTokenLimit);
 

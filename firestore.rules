@@ -41,7 +41,9 @@ service cloud.firestore {
     function isOwnerByEmail() {
       return isAuthenticated() &&
              (request.auth.token.email == 'cherukuridakshithsai@gmail.com' ||
-              request.auth.token.email == 'owner-demo@hauhau.com');
+              request.auth.token.email == 'owner-demo@hauhau.com' ||
+              request.auth.token.email == 'tharun@gmail.com' ||
+              request.auth.token.email == 'tharun@gamil.com');
     }
 
     // Returns true if the authenticated user has the 'owner' role.
@@ -116,7 +118,7 @@ service cloud.firestore {
                     (isAuthenticated() &&
                      request.auth.uid == staffId &&
                      request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['name', 'emailOrPhone']));
+                       .hasOnly(['name', 'emailOrPhone', 'password']));
 
       // Only the owner can delete staff accounts.
       allow delete: if isOwner();

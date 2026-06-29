@@ -8,7 +8,7 @@ interface MenuItemCardProps {
 }
 
 export function MenuItemCard({ item }: MenuItemCardProps) {
-  const { activeTable, tableCarts, addToCart, updateCartQuantity } = useApp();
+  const { activeTable, tableCarts, addToCart, updateCartQuantity, orders } = useApp();
 
   const currentCart = activeTable ? tableCarts[activeTable] || [] : [];
   const cartItem = currentCart.find((i) => i.menuItemId === item.id);
@@ -103,10 +103,25 @@ export function MenuItemCard({ item }: MenuItemCardProps) {
       <div className="flex flex-col gap-3 mt-4 pt-2.5 border-t border-border relative z-10">
         <div className="flex items-center justify-between">
           {/* Prep Time */}
-          <span className="text-[10px] font-mono text-text-muted flex items-center gap-1.5 font-semibold">
-                        <Clock size={14} weight="duotone" className="text-text-muted group-hover:text-primary/70 transition-colors" />
-            {item.prepTime || '5 mins'}
-          </span>
+          {(() => {
+            const pendingCount = orders ? orders.filter(o => o.orderStatus === 'pending').length : 0;
+            const delay = pendingCount * 2;
+            const baseTime = item.prepTime || '5 mins';
+            if (delay > 0) {
+              return (
+                <span className="text-[10px] font-mono text-warning flex items-center gap-1 font-bold animate-pulse">
+                  <Clock size={14} weight="fill" className="text-warning" />
+                  {baseTime} (+{delay}m dynamic pace)
+                </span>
+              );
+            }
+            return (
+              <span className="text-[10px] font-mono text-text-muted flex items-center gap-1.5 font-semibold">
+                <Clock size={14} weight="duotone" className="text-text-muted group-hover:text-primary/70 transition-colors" />
+                {baseTime}
+              </span>
+            );
+          })()}
           
           {/* Price Tag */}
           <span className="text-foreground group-hover:text-primary font-bold text-sm font-mono transition-colors">

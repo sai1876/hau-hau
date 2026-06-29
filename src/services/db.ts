@@ -1609,5 +1609,209 @@ export const db = {
       
       window.dispatchEvent(new Event('storage'));
     }
+  },
+
+  resetFirebaseBlocked(): void {
+    firebaseBlocked = false;
+  },
+
+  async syncLocalStorageToFirestore(): Promise<{
+    settings: number;
+    menu: number;
+    staff: number;
+    tokens: number;
+    transactions: number;
+    orders: number;
+    auditLogs: number;
+    errors: string[];
+  }> {
+    const stats = {
+      settings: 0,
+      menu: 0,
+      staff: 0,
+      tokens: 0,
+      transactions: 0,
+      orders: 0,
+      auditLogs: 0,
+      errors: [] as string[]
+    };
+
+    if (!isFirebaseConfigured()) {
+      throw new Error("Firebase is not configured. Configure environment variables first.");
+    }
+
+    // 1. Sync Settings
+    try {
+      const localSettingsStr = localStorage.getItem(SETTINGS_KEY);
+      if (localSettingsStr) {
+        const localSettings = JSON.parse(localSettingsStr);
+        const docRef = doc(firestore, 'settings', 'settings_default');
+        await setDoc(docRef, localSettings, { merge: true });
+        stats.settings++;
+      }
+    } catch (e: any) {
+      console.warn("Sync settings failed:", e);
+      stats.errors.push(`Settings: ${e.message || e}`);
+    }
+
+    // 2. Sync Menu
+    try {
+      const localMenuStr = localStorage.getItem(MENU_KEY);
+      if (localMenuStr) {
+        const localMenu = JSON.parse(localMenuStr) as MenuItem[];
+        for (const item of localMenu) {
+          try {
+            const itemRef = doc(firestore, 'menu', item.id);
+            const snap = await getDoc(itemRef);
+            if (!snap.exists()) {
+              await setDoc(itemRef, item);
+              stats.menu++;
+            }
+          } catch (e: any) {
+            console.warn(`Sync menu item ${item.name} failed:`, e);
+            if (!stats.errors.includes("Menu items write restricted")) {
+              stats.errors.push("Menu items write restricted");
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("Sync menu failed:", e);
+    }
+
+    // 3. Sync Staff
+    try {
+      const localStaffStr = localStorage.getItem(STAFF_KEY);
+      if (localStaffStr) {
+        const localStaff = JSON.parse(localStaffStr) as StaffAccount[];
+        for (const member of localStaff) {
+          try {
+            const staffRef = doc(firestore, 'staff', member.id);
+            const snap = await getDoc(staffRef);
+            if (!snap.exists()) {
+              await setDoc(staffRef, member);
+              stats.staff++;
+            }
+          } catch (e: any) {
+            console.warn(`Sync staff ${member.username} failed:`, e);
+            if (!stats.errors.includes("Staff accounts write restricted")) {
+              stats.errors.push("Staff accounts write restricted");
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("Sync staff failed:", e);
+    }
+
+    // 4. Sync Tokens
+    try {
+      const localTokensStr = localStorage.getItem(TOKENS_KEY);
+      if (localTokensStr) {
+        const localTokens = JSON.parse(localTokensStr) as TokenAccount[];
+        for (const token of localTokens) {
+          try {
+            const tokenRef = doc(firestore, 'tokens', token.id);
+            const snap = await getDoc(tokenRef);
+            if (!snap.exists()) {
+              await setDoc(tokenRef, token);
+              stats.tokens++;
+            } else {
+              const remoteToken = snap.data() as TokenAccount;
+              const remoteUpdated = remoteToken.updatedAt ? new Date(remoteToken.updatedAt).getTime() : 0;
+              const localUpdated = token.updatedAt ? new Date(token.updatedAt).getTime() : 0;
+              if (localUpdated > remoteUpdated) {
+                await setDoc(tokenRef, token, { merge: true });
+                stats.tokens++;
+              }
+            }
+          } catch (e: any) {
+            console.warn(`Sync token ${token.cardNo} failed:`, e);
+            if (!stats.errors.includes("Token accounts write restricted")) {
+              stats.errors.push("Token accounts write restricted");
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("Sync tokens failed:", e);
+    }
+
+    // 5. Sync Transactions
+    try {
+      const localTxsStr = localStorage.getItem(TRANSACTIONS_KEY);
+      if (localTxsStr) {
+        const localTxs = JSON.parse(localTxsStr) as TokenTransaction[];
+        for (const tx of localTxs) {
+          try {
+            const txRef = doc(firestore, 'token_transactions', tx.id);
+            const snap = await getDoc(txRef);
+            if (!snap.exists()) {
+              await setDoc(txRef, tx);
+              stats.transactions++;
+            }
+          } catch (e: any) {
+            console.warn(`Sync transaction ${tx.id} failed:`, e);
+            if (!stats.errors.includes("Transactions write restricted")) {
+              stats.errors.push("Transactions write restricted");
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("Sync transactions failed:", e);
+    }
+
+    // 6. Sync Orders
+    try {
+      const localOrdersStr = localStorage.getItem(ORDERS_KEY);
+      if (localOrdersStr) {
+        const localOrders = JSON.parse(localOrdersStr) as Order[];
+        for (const order of localOrders) {
+          try {
+            const orderRef = doc(firestore, 'orders', order.id);
+            const snap = await getDoc(orderRef);
+            if (!snap.exists()) {
+              await setDoc(orderRef, order);
+              stats.orders++;
+            }
+          } catch (e: any) {
+            console.warn(`Sync order ${order.id} failed:`, e);
+            if (!stats.errors.includes("Orders write restricted")) {
+              stats.errors.push("Orders write restricted");
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("Sync orders failed:", e);
+    }
+
+    // 7. Sync Audit Logs
+    try {
+      const localLogsStr = localStorage.getItem(AUDIT_LOGS_KEY);
+      if (localLogsStr) {
+        const localLogs = JSON.parse(localLogsStr) as AuditLog[];
+        for (const log of localLogs) {
+          try {
+            const logRef = doc(firestore, 'audit_logs', log.id);
+            const snap = await getDoc(logRef);
+            if (!snap.exists()) {
+              await setDoc(logRef, log);
+              stats.auditLogs++;
+            }
+          } catch (e: any) {
+            console.warn(`Sync audit log ${log.id} failed:`, e);
+            if (!stats.errors.includes("Audit logs write restricted")) {
+              stats.errors.push("Audit logs write restricted");
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("Sync audit logs failed:", e);
+    }
+
+    return stats;
   }
 };

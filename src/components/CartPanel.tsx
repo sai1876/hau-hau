@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { TokenIcon } from './TokenIcon';
-import { Trash, Money, CreditCard, Coins, ArrowCircleUp } from '@phosphor-icons/react';
+import { Trash, Money, CreditCard, Coins, ArrowCircleUp, Sparkle } from '@phosphor-icons/react';
 import { InfoTag } from './InfoTag';
 
 interface CartPanelProps {
@@ -18,11 +18,72 @@ export function CartPanel({ onClose }: CartPanelProps) {
     confirmOrder,
     confirmAction,
     tokens,
+    tokenTransactions,
     settings
   } = useApp();
 
   const [paymentMode, setPaymentMode] = useState<'cash' | 'online' | 'tokens' | null>(null);
   const [tokenCardInput, setTokenCardInput] = useState('');
+
+  // Grok AI States
+  const [grokApiKey, setGrokApiKey] = useState('');
+  const [isAnalyzingSpend, setIsAnalyzingSpend] = useState(false);
+  const [spendInsights, setSpendInsights] = useState<any>(null);
+  const [showSpendInsights, setShowSpendInsights] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setGrokApiKey(localStorage.getItem('hau_hau_grok_api_key') || '');
+    }
+  }, []);
+
+  // Reset insights when card input changes
+  useEffect(() => {
+    setSpendInsights(null);
+    setShowSpendInsights(false);
+  }, [tokenCardInput]);
+
+  const handleGetSpendInsights = async () => {
+    const card = tokens.find(t => t.cardNo === tokenCardInput.trim());
+    if (!card) return;
+    setIsAnalyzingSpend(true);
+    try {
+      const studentTxs = tokenTransactions.filter(tx => tx.cardNo === card.cardNo);
+      const summary = {
+        name: card.name,
+        cardNo: card.cardNo,
+        tokens: card.tokens,
+        txCount: studentTxs.length,
+        transactions: studentTxs.slice(0, 10).map(t => ({
+          type: t.type,
+          tokens: t.tokens,
+          amount: t.amount,
+          date: t.createdAt?.split('T')[0],
+        })),
+      };
+
+      const res = await fetch('/api/grok', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-grok-api-key': grokApiKey,
+        },
+        body: JSON.stringify({
+          action: 'spending-insights',
+          data: summary,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch insights');
+      const result = await res.json();
+      setSpendInsights(result);
+      setShowSpendInsights(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsAnalyzingSpend(false);
+    }
+  };
 
   const cartItems = activeTable ? tableCarts[activeTable] || [] : [];
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -255,6 +316,68 @@ export function CartPanel({ onClose }: CartPanelProps) {
                          <span className="font-bold">✓ Verified: {studentCard.name}</span>
                          <span className="font-bold">{studentCard.tokens} tokens</span>
                        </div>
+
+                       {/* Client-side low-token alert & AI Spend Insights */}
+                       {(() => {
+                         const studentTxs = tokenTransactions ? tokenTransactions.filter(tx => tx.cardNo === studentCard.cardNo && tx.type === 'deduction') : [];
+                         const txsByDate: Record<string, number> = {};
+                         studentTxs.forEach(tx => {
+                           const dStr = tx.createdAt?.split('T')[0];
+                           if (dStr) txsByDate[dStr] = (txsByDate[dStr] || 0) + tx.tokens;
+                         });
+                         const dates = Object.keys(txsByDate);
+                         const avgTokensPerDay = dates.length >= 2 
+                           ? Object.values(txsByDate).reduce((s, v) => s + v, 0) / dates.length 
+                           : 1.5;
+
+                         const remainingTokens = studentCard.tokens - requiredTokens;
+                         const isDepletedSoon = remainingTokens <= avgTokensPerDay * 3;
+
+                         return (
+                           <div className="flex flex-col gap-2 mt-1.5 border-t border-blue-500/10 pt-2 shrink-0">
+                             {isDepletedSoon && (
+                               <div className="bg-warning/10 border border-warning/30 p-2 rounded-lg text-warning flex flex-col gap-1">
+                                 <span className="font-bold flex items-center gap-1 text-[10px]">
+                                   ⚠️ AI Smart Warning
+                                 </span>
+                                 <p className="text-[9px] text-text-muted leading-normal font-semibold">
+                                   {studentCard.name} consumes ~{avgTokensPerDay.toFixed(1)} tokens/day. Balance after checkout ({remainingTokens} tokens) will run out in approx. {Math.max(0, remainingTokens / avgTokensPerDay).toFixed(1)} days.
+                                 </p>
+                               </div>
+                             )}
+
+                             <div className="flex justify-between items-center mt-0.5">
+                               <span className="text-[10px] text-text-muted font-bold uppercase">AI Insights</span>
+                               <button
+                                 type="button"
+                                 onClick={handleGetSpendInsights}
+                                 disabled={isAnalyzingSpend}
+                                 className="text-[10px] font-bold text-primary hover:text-primary-hover flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                               >
+                                 {isAnalyzingSpend ? "Analyzing..." : "Generate AI Insights"}
+                               </button>
+                             </div>
+
+                             {showSpendInsights && spendInsights && (
+                               <div className="bg-blue-500/10 border border-blue-500/20 p-2.5 rounded-lg flex flex-col gap-1.5 text-[10px] text-text-muted animate-slide-in relative">
+                                 <button
+                                   type="button"
+                                   onClick={() => setShowSpendInsights(false)}
+                                   className="absolute top-1 right-2 hover:text-white font-bold"
+                                 >
+                                   ×
+                                 </button>
+                                 <div className="font-semibold">
+                                   <span className="text-blue-400 font-bold block">Rate: {spendInsights.consumptionRate}</span>
+                                   <span className="block mt-1"><strong className="text-foreground">Habits:</strong> {spendInsights.spendingHabits}</span>
+                                   <span className="block mt-1 text-[#71d384] font-bold">Suggested Recharge: {spendInsights.rechargeRecommendation} tokens</span>
+                                   <span className="block text-[9px] opacity-75 mt-0.5">{spendInsights.explanation}</span>
+                                 </div>
+                               </div>
+                             )}
+                           </div>
+                         );
+                       })()}
                        <div className="flex flex-col gap-1 bg-surface-container/20 p-2 rounded border border-border/50 mt-1 font-mono text-[10px] leading-relaxed text-text-muted">
                           {settings?.taxEnabled ? (
                             <>

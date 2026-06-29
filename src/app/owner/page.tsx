@@ -53,7 +53,9 @@ export default function OwnerDashboardPage() {
     updateStaffLimit,
     settings,
     auditLogs,
-    updateSettings
+    updateSettings,
+    usingFirebase,
+    syncDataToCloud
   } = useApp();
 
   // Navigation Tabs for Command Center
@@ -67,6 +69,7 @@ export default function OwnerDashboardPage() {
   const [historyToken, setHistoryToken] = useState<TokenAccount | null>(null);
   const [selectedStaffDetail, setSelectedStaffDetail] = useState<StaffAccount | null>(null);
   const [editingLimitValue, setEditingLimitValue] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Settings form states
   const [outletName, setOutletName] = useState('');
@@ -76,6 +79,13 @@ export default function OwnerDashboardPage() {
   const [currency, setCurrency] = useState('INR');
   const [receiptFooter, setReceiptFooter] = useState('');
   const [monthlyTokenLimitDefaults, setMonthlyTokenLimitDefaults] = useState('');
+  const [grokApiKey, setGrokApiKey] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setGrokApiKey(localStorage.getItem('hau_hau_grok_api_key') || '');
+    }
+  }, []);
 
   // Audit search & filter state
   const [auditQuery, setAuditQuery] = useState('');
@@ -152,6 +162,87 @@ export default function OwnerDashboardPage() {
 
   // State for editing menu item
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+
+  // AI Feature States & Operations
+  const [forecastData, setForecastData] = useState<any>(null);
+  const [isForecasting, setIsForecasting] = useState(false);
+  const [menuPricingData, setMenuPricingData] = useState<any>(null);
+  const [isAnalyzingMenu, setIsAnalyzingMenu] = useState(false);
+
+  const handleGenerateForecast = async () => {
+    setIsForecasting(true);
+    try {
+      const summaryData = orders.slice(0, 80).map(o => ({
+        date: o.createdAt?.split('T')[0],
+        total: o.total,
+        itemsCount: o.items.reduce((s, i) => s + i.quantity, 0),
+        paymentMode: o.paymentMode,
+      }));
+
+      const res = await fetch('/api/grok', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-grok-api-key': grokApiKey,
+        },
+        body: JSON.stringify({
+          action: 'forecast',
+          data: summaryData,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch forecast');
+      const data = await res.json();
+      setForecastData(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsForecasting(false);
+    }
+  };
+
+  const handleAnalyzeMenu = async () => {
+    setIsAnalyzingMenu(true);
+    try {
+      const salesCount: Record<string, number> = {};
+      orders.forEach(o => {
+        if (o.orderStatus !== 'cancelled') {
+          o.items.forEach(i => {
+            salesCount[i.menuItemId] = (salesCount[i.menuItemId] || 0) + i.quantity;
+          });
+        }
+      });
+
+      const menuSummary = menu.map(m => ({
+        id: m.id,
+        name: m.name,
+        category: m.category,
+        price: m.price,
+        salesCount: salesCount[m.id] || 0,
+      }));
+
+      const res = await fetch('/api/grok', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-grok-api-key': grokApiKey,
+        },
+        body: JSON.stringify({
+          action: 'menu-pricing',
+          data: menuSummary,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to analyze menu');
+      const data = await res.json();
+      setMenuPricingData(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsAnalyzingMenu(false);
+    }
+  };
+
   const [editName, setEditName] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [editCategory, setEditCategory] = useState('');
@@ -838,6 +929,134 @@ export default function OwnerDashboardPage() {
                   </div>
                 </div>
               </div>
+
+              {/* AI COMMAND: SALES FORECASTING */}
+              <div className="minimal-card p-6 rounded-xl bg-surface border border-border flex flex-col gap-5 relative overflow-hidden mt-2">
+                <div className="absolute right-0 top-0 w-36 h-36 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
+                
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-inner">
+                      <PresentationChart size={20} weight="duotone" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                        AI Sales & Demand Forecasting
+                        <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded font-bold uppercase">Grok Powered</span>
+                      </h3>
+                      <p className="text-xs text-text-muted mt-0.5">Analyze historical campus sales and generate predictive staffing/prep insights</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGenerateForecast}
+                    disabled={isForecasting}
+                    className="minimal-btn-primary px-4 py-2 text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50 flex items-center gap-2 self-start sm:self-center"
+                  >
+                    {isForecasting ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      "Generate Forecast"
+                    )}
+                  </button>
+                </div>
+
+                {!forecastData && !isForecasting && (
+                  <div className="py-8 flex flex-col items-center justify-center text-center">
+                    <PresentationChart size={40} weight="thin" className="text-text-muted/40 mb-3" />
+                    <span className="text-xs font-bold text-text-muted">No forecast generated yet</span>
+                    <p className="text-[11px] text-text-muted mt-1 max-w-[280px]">Click the button above to run real-time machine learning predictions on your outlet logs.</p>
+                  </div>
+                )}
+
+                {isForecasting && (
+                  <div className="py-12 flex flex-col items-center justify-center text-center gap-3 animate-pulse">
+                    <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs text-primary font-bold">Consulting Grok AI Engine...</span>
+                    <p className="text-[10px] text-text-muted max-w-[220px]">Compressing transaction histories and evaluating day-wise ordering patterns.</p>
+                  </div>
+                )}
+
+                {forecastData && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-slide-in">
+                    {/* Left Column: Forecast chart */}
+                    <div className="flex flex-col gap-4">
+                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">7-Day Projected Sales (INR)</h4>
+                      <div className="flex flex-col gap-3.5 bg-surface-container/20 border border-border p-4 rounded-xl">
+                        {forecastData.revenueForecast?.map((item: any) => {
+                          const dateObj = new Date(item.date);
+                          const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                          const maxVal = Math.max(...forecastData.revenueForecast.map((x: any) => x.forecastedRevenue));
+                          const percentWidth = maxVal > 0 ? (item.forecastedRevenue / maxVal) * 100 : 0;
+                          return (
+                            <div key={item.date} className="flex flex-col gap-1">
+                              <div className="flex justify-between text-xs font-semibold">
+                                <span className="text-foreground">{dayLabel}</span>
+                                <span className="font-mono text-foreground">₹{item.forecastedRevenue.toFixed(0)} <span className="text-[10px] text-text-muted font-normal">({item.confidence}% confidence)</span></span>
+                              </div>
+                              <div className="w-full h-2 bg-surface border border-border rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-gradient-to-r from-primary to-orange-400 rounded-full transition-all duration-500" 
+                                  style={{ width: `${percentWidth}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Right Column: Dynamic insights & recommendations */}
+                    <div className="flex flex-col gap-5">
+                      {/* Peak Busy Periods */}
+                      <div className="flex flex-col gap-2">
+                        <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Projected Peak Intervals</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {forecastData.peakHours?.map((hour: any, idx: number) => (
+                            <div key={idx} className="p-3 bg-warning/5 border border-warning/20 rounded-xl flex flex-col gap-1 text-xs">
+                              <span className="font-bold text-warning-text flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-warning" />
+                                {hour.timeOfDay}
+                              </span>
+                              <p className="text-[11px] text-text-muted leading-relaxed mt-0.5">{hour.explanation}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Staff & Prep suggestions */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4.5 border-t border-border pt-4">
+                        <div className="flex flex-col gap-2">
+                          <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <span className="w-1 h-1 rounded-full bg-success" />
+                            Staff Scheduling Tips
+                          </h4>
+                          <ul className="flex flex-col gap-2 text-[11px] text-text-muted list-disc pl-4 leading-relaxed font-semibold">
+                            {forecastData.staffingSuggestions?.map((tip: string, idx: number) => (
+                              <li key={idx}>{tip}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            Kitchen Prep Targets
+                          </h4>
+                          <ul className="flex flex-col gap-2 text-[11px] text-text-muted list-disc pl-4 leading-relaxed font-semibold">
+                            {forecastData.prepRecommendations?.map((rec: string, idx: number) => (
+                              <li key={idx}>{rec}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1128,10 +1347,137 @@ export default function OwnerDashboardPage() {
                   label="items"
                 />
               </div>
+
+              {/* AI COMMAND: MENU OPTIMIZATION */}
+              <div className="w-full minimal-card p-6 rounded-xl bg-surface border border-border flex flex-col gap-5 relative overflow-hidden mt-6 animate-slide-in">
+                <div className="absolute right-0 top-0 w-36 h-36 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
+                
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-inner">
+                      <BookOpen size={20} weight="duotone" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                        AI Menu Engineering & Pricing Advisor
+                        <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded font-bold uppercase">Grok Analysis</span>
+                      </h3>
+                      <p className="text-xs text-text-muted mt-0.5">Categorize your menu items and get suggestions on dynamic pricing / combo promotions</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAnalyzeMenu}
+                    disabled={isAnalyzingMenu}
+                    className="minimal-btn-primary px-4 py-2 text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50 flex items-center gap-2 self-start sm:self-center"
+                  >
+                    {isAnalyzingMenu ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      "Run Menu Analysis"
+                    )}
+                  </button>
+                </div>
+
+                {!menuPricingData && !isAnalyzingMenu && (
+                  <div className="py-8 flex flex-col items-center justify-center text-center">
+                    <BookOpen size={40} weight="thin" className="text-text-muted/40 mb-3" />
+                    <span className="text-xs font-bold text-text-muted">No menu analysis available</span>
+                    <p className="text-[11px] text-text-muted mt-1 max-w-[280px]">Run a menu BCG engineering analysis to optimize your prices and item promotions.</p>
+                  </div>
+                )}
+
+                {isAnalyzingMenu && (
+                  <div className="py-12 flex flex-col items-center justify-center text-center gap-3 animate-pulse">
+                    <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs text-primary font-bold">Classifying menu with BCG Matrix...</span>
+                    <p className="text-[10px] text-text-muted max-w-[220px]">Calculating item transaction volume relative to catalog price distributions.</p>
+                  </div>
+                )}
+
+                {menuPricingData && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-slide-in">
+                    {/* Item BCG Classification (2 cols) */}
+                    <div className="lg:col-span-2 flex flex-col gap-4">
+                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Menu BCG Classification</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {menuPricingData.categorization?.map((item: any) => {
+                          const originalItem = menu.find(m => m.id === item.itemId);
+                          const itemName = originalItem ? originalItem.name : "Unknown Item";
+                          
+                          let badgeBg = "bg-primary/10 text-primary border-primary/20";
+                          if (item.class === "Star") badgeBg = "bg-success/15 text-[#71d384] border-[#2e7d32]/25";
+                          if (item.class === "Plowhorse") badgeBg = "bg-blue-500/10 text-blue-400 border-blue-500/20";
+                          if (item.class === "Dog") badgeBg = "bg-error/10 text-error border-error/20";
+
+                          return (
+                            <div key={item.itemId} className="p-3.5 bg-surface-container/20 border border-border rounded-xl flex flex-col gap-1.5">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="font-bold text-foreground line-clamp-1">{itemName}</span>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 border rounded uppercase shrink-0 ${badgeBg}`}>
+                                  {item.class}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-text-muted leading-relaxed font-semibold mt-0.5">{item.explanation}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Combos list */}
+                      <div className="flex flex-col gap-3 mt-4 border-t border-border pt-4">
+                        <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Recommended Combos & Bundles</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          {menuPricingData.combos?.map((combo: any, idx: number) => (
+                            <div key={idx} className="p-3.5 bg-primary/5 border border-primary/15 rounded-xl flex flex-col justify-between gap-2.5">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex justify-between items-start gap-1">
+                                  <span className="font-bold text-xs text-foreground">{combo.title}</span>
+                                  <span className="font-bold text-primary text-xs font-mono shrink-0">₹{combo.price}</span>
+                                </div>
+                                <span className="text-[10px] text-text-muted font-bold block mt-1">Includes: {combo.items?.join(', ')}</span>
+                              </div>
+                              <p className="text-[10px] text-text-muted leading-relaxed font-semibold">{combo.rationale}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pricing suggestions (1 col) */}
+                    <div className="lg:col-span-1 flex flex-col gap-4 border-t lg:border-t-0 lg:border-l border-border pt-4 lg:pt-0 lg:pl-6">
+                      <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Pricing Suggestions</h4>
+                      <div className="flex flex-col gap-3.5">
+                        {menuPricingData.pricingSuggestions?.map((sug: any) => {
+                          const orig = menu.find(m => m.id === sug.itemId);
+                          const name = orig ? orig.name : sug.name || "Unknown Item";
+                          const curPrice = orig ? orig.price : sug.currentPrice;
+
+                          return (
+                            <div key={sug.itemId} className="p-3.5 bg-surface-container/20 border border-border rounded-xl flex flex-col gap-2">
+                              <div className="flex justify-between items-start gap-1">
+                                <span className="font-bold text-xs text-foreground line-clamp-1">{name}</span>
+                                <div className="flex items-center gap-1.5 shrink-0 text-xs font-mono font-bold">
+                                  <span className="text-text-muted line-through">₹{curPrice}</span>
+                                  <span className="text-success">₹{sug.suggestedPrice}</span>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-text-muted leading-relaxed font-semibold">{sug.rationale}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* D. STAFF ACCOUNTS WORKSPACE */}
           {activeWorkspace === 'staff' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-in">
               {/* Staff List */}
@@ -1615,6 +1961,67 @@ export default function OwnerDashboardPage() {
                   </p>
                   <div className="bg-primary/5 border border-primary/20 p-3 rounded-lg text-primary text-[11px] leading-relaxed">
                     <strong>Exchange Rate Note:</strong> Student cards and checkout will use 1 Token = ₹{tokenValueInRupees || '0.00'} as the baseline value.
+                  </div>
+                </div>
+
+                <div className="minimal-card rounded-xl bg-surface border border-border p-4.5 text-xs shadow-sm flex flex-col gap-3">
+                  <h4 className="font-bold text-foreground flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    Grok AI Configuration
+                  </h4>
+                  <p className="text-text-muted leading-relaxed">
+                    Provide your xAI Grok API Key to enable demand forecasting, menu pricing recommendations, and real-time kitchen pacing.
+                  </p>
+                  <div className="flex flex-col gap-1.5 mt-1">
+                    <label className="text-[10px] text-text-muted font-bold uppercase">Grok API Key</label>
+                    <input
+                      type="password"
+                      placeholder="xai-..."
+                      value={grokApiKey}
+                      onChange={(e) => {
+                        setGrokApiKey(e.target.value);
+                        localStorage.setItem('hau_hau_grok_api_key', e.target.value);
+                      }}
+                      className="minimal-input px-3.5 py-2.5 text-xs text-white font-mono"
+                    />
+                    <span className="text-[10px] text-text-muted leading-relaxed">
+                      For testing without an API key, leave blank or enter <code className="font-mono text-primary bg-primary/5 px-1 py-0.5 rounded">grok-mock</code> to run in Demo mode.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="minimal-card rounded-xl bg-surface border border-border p-4.5 text-xs shadow-sm flex flex-col gap-3">
+                  <h4 className="font-bold text-foreground flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${usingFirebase ? 'bg-success animate-pulse' : 'bg-warning animate-pulse'}`} />
+                    Database Sync & Mode
+                  </h4>
+                  <p className="text-text-muted leading-relaxed">
+                    Hau-Hau POS operates in two modes: Cloud Sync (live Firebase) or Local Fallback (offline mode using LocalStorage).
+                  </p>
+                  <div className="flex flex-col gap-2 mt-1">
+                    <div className="flex justify-between items-center bg-[#1c1b1b]/50 border border-border p-2.5 rounded-lg">
+                      <span className="text-text-muted">Connection Mode:</span>
+                      <span className={`font-black uppercase tracking-wider text-[10px] px-2 py-0.5 border rounded ${usingFirebase ? 'bg-success/15 text-[#71d384] border-[#2e7d32]/25' : 'bg-warning/10 text-warning border-warning/20'}`}>
+                        {usingFirebase ? 'Firebase Active' : 'LocalStorage Fallback'}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsSyncing(true);
+                        await syncDataToCloud();
+                        setIsSyncing(false);
+                      }}
+                      disabled={isSyncing}
+                      className="bg-primary hover:bg-primary-hover disabled:opacity-50 text-white font-black uppercase tracking-wider py-2.5 rounded-lg text-[10px] transition-colors cursor-pointer w-full text-center"
+                    >
+                      {isSyncing ? 'Syncing...' : 'Sync Local Data to Cloud'}
+                    </button>
+                    
+                    <span className="text-[10px] text-text-muted leading-relaxed">
+                      Click sync to force-check your connection and upload any offline orders, tokens, or audit logs stored in this browser to the live database.
+                    </span>
                   </div>
                 </div>
               </div>

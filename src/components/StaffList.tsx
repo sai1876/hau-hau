@@ -59,15 +59,17 @@ export function StaffList() {
                       </div>
                       <div className="flex flex-col">
                         <span className="font-bold text-foreground text-xs">{staff.name}</span>
-                        <span className="text-[9px] bg-surface-container text-text-muted px-1.5 py-0.2 rounded-sm border border-border font-bold mt-1 w-max">
-                          Floor Staff
+                        <span className="text-[9px] bg-surface-container text-text-muted px-1.5 py-0.2 rounded-sm border border-border font-bold mt-1 w-max capitalize">
+                          {staff.role === 'owner' ? 'Owner' : 'Floor Staff'}
                         </span>
                       </div>
                     </div>
                   </td>
                   <td className="p-3.5 text-text-muted font-mono">{staff.emailOrPhone}</td>
                   <td className="p-3.5 text-foreground font-mono font-semibold">@{staff.username}</td>
-                  <td className="p-3.5 text-foreground font-semibold">Floor Staff</td>
+                  <td className="p-3.5 text-foreground font-semibold capitalize">
+                    {staff.role === 'owner' ? 'Owner' : 'Floor Staff'}
+                  </td>
                   <td className="p-3.5">
                     <div className="flex items-center gap-2">
                       <span className={`w-1.5 h-1.5 rounded-full ${staff.status === 'active' ? 'bg-[#71d384] animate-pulse-ring-emerald' : 'bg-error'} inline-block`} />
