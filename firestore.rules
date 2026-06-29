@@ -40,7 +40,8 @@ service cloud.firestore {
     // This is a lightweight check that doesn't require a Firestore document lookup.
     function isOwnerByEmail() {
       return isAuthenticated() &&
-             request.auth.token.email == 'cherukuridakshithsai@gmail.com';
+             (request.auth.token.email == 'cherukuridakshithsai@gmail.com' ||
+              request.auth.token.email == 'owner-demo@hauhau.com');
     }
 
     // Returns true if the authenticated user has the 'owner' role.

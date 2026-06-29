@@ -13,6 +13,7 @@ import {
   orderBy,
   runTransaction
 } from 'firebase/firestore';
+import { generateMockData } from './mockGenerator.mjs';
 
 const MENU_KEY = 'hau_hau_menu';
 const STAFF_KEY = 'hau_hau_staff';
@@ -180,6 +181,27 @@ const DEFAULT_STAFF: StaffAccount[] = [
     status: 'active',
     role: 'owner',
     outletId: DEFAULT_OUTLET_ID
+  },
+  {
+    id: 'owner_demo_uid',
+    name: 'Investor (Owner Demo)',
+    emailOrPhone: 'owner-demo@hauhau.com',
+    username: 'owner-demo',
+    password: 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791', // SHA-256 for 'demo123'
+    status: 'active',
+    role: 'owner',
+    outletId: DEFAULT_OUTLET_ID
+  },
+  {
+    id: 'staff_demo_uid',
+    name: 'Investor (Staff Demo)',
+    emailOrPhone: 'staff-demo@hauhau.com',
+    username: 'staff-demo',
+    password: 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791', // SHA-256 for 'demo123'
+    status: 'active',
+    role: 'staff',
+    monthlyTokenLimit: 5000,
+    outletId: DEFAULT_OUTLET_ID
   }
 ];
 
@@ -207,23 +229,54 @@ export const db = {
       localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU));
     }
 
-    if (!localStorage.getItem(STAFF_KEY)) {
+    const existingStaff = localStorage.getItem(STAFF_KEY);
+    if (existingStaff) {
+      try {
+        const parsed = JSON.parse(existingStaff) as StaffAccount[];
+        const hasDemoOwner = parsed.some(s => s.username === 'owner-demo');
+        const hasDemoStaff = parsed.some(s => s.username === 'staff-demo');
+        if (!hasDemoOwner || !hasDemoStaff) {
+          localStorage.setItem(STAFF_KEY, JSON.stringify(DEFAULT_STAFF));
+        }
+      } catch {
+        localStorage.setItem(STAFF_KEY, JSON.stringify(DEFAULT_STAFF));
+      }
+    } else {
       localStorage.setItem(STAFF_KEY, JSON.stringify(DEFAULT_STAFF));
     }
-    if (!localStorage.getItem(ORDERS_KEY)) {
-      localStorage.setItem(ORDERS_KEY, JSON.stringify([]));
+
+    // Load or seed default realistic mock values if orders list is empty
+    const existingOrders = localStorage.getItem(ORDERS_KEY);
+    let ordersList: Order[] = [];
+    if (existingOrders) {
+      try {
+        ordersList = JSON.parse(existingOrders) as Order[];
+      } catch {
+        ordersList = [];
+      }
     }
-    if (!localStorage.getItem(TOKENS_KEY)) {
-      localStorage.setItem(TOKENS_KEY, JSON.stringify([]));
+
+    if (ordersList.length === 0) {
+      console.log("Seeding LocalStorage with realistic investor demo metrics...");
+      const mock = generateMockData(new Date());
+      localStorage.setItem(ORDERS_KEY, JSON.stringify(mock.orders));
+      localStorage.setItem(TOKENS_KEY, JSON.stringify(mock.tokens));
+      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(mock.tokenTransactions));
+      localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(mock.auditLogs));
+    } else {
+      if (!localStorage.getItem(TOKENS_KEY)) {
+        localStorage.setItem(TOKENS_KEY, JSON.stringify([]));
+      }
+      if (!localStorage.getItem(TRANSACTIONS_KEY)) {
+        localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([]));
+      }
+      if (!localStorage.getItem(AUDIT_LOGS_KEY)) {
+        localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify([]));
+      }
     }
-    if (!localStorage.getItem(TRANSACTIONS_KEY)) {
-      localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([]));
-    }
+
     if (!localStorage.getItem(SETTINGS_KEY)) {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
-    }
-    if (!localStorage.getItem(AUDIT_LOGS_KEY)) {
-      localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify([]));
     }
   },
 

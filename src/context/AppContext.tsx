@@ -299,8 +299,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Map usernames to emails for Firebase Auth
     if (username === 'owner') {
       email = process.env.NEXT_PUBLIC_PRODUCTION_OWNER_EMAIL || 'cherukuridakshithsai@gmail.com';
+    } else if (username === 'owner-demo') {
+      email = 'owner-demo@hauhau.com';
     } else if (username === 'staff') {
       email = 'staff@hauhau.com';
+    } else if (username === 'staff-demo') {
+      email = 'staff-demo@hauhau.com';
     } else {
       // Find staff by username to get their email
       const profile = staffList.find(s => s.username.toLowerCase() === username.toLowerCase());
@@ -354,14 +358,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const isOwnerBypass = bypassAuth || 
         password === 'owner' || 
         password === 'owner123' ||
+        password === 'demo123' ||
         inputHash === '4c1029697ee358715d3a14a2add817c4b01651440de808371f78165ac90dc581' || // 'owner'
-        inputHash === '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9';  // 'owner123'
+        inputHash === '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9' || // 'owner123'
+        inputHash === 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791';  // 'demo123'
 
-      if (username === 'owner' && isOwnerBypass) {
-        const user = { name: 'Sarah (Owner)', role: 'owner' as const, username };
+      if ((username === 'owner' || username === 'owner-demo') && isOwnerBypass) {
+        const user = { 
+          name: username === 'owner-demo' ? 'Investor (Owner Demo)' : 'Sarah (Owner)', 
+          role: 'owner' as const, 
+          username 
+        };
         setCurrentUser(user);
         localStorage.setItem('hau_hau_session', JSON.stringify(user));
-        addToast('Welcome back, Sarah!', 'success');
+        addToast(`Welcome back, ${user.name}!`, 'success');
         router.push('/owner');
         return true;
       }
@@ -373,7 +383,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           s.password === inputHash || 
           s.password === password || 
           s.password === '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6' || // 'staff123'
-          s.password === 'staff123'
+          s.password === 'staff123' ||
+          s.password === 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791' // 'demo123'
         )
       );
       if (foundStaff) {
