@@ -105,6 +105,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<AppContextType['toasts']>([]);
   const toastIdRef = useRef(0);
   const [usingFirebase, setUsingFirebase] = useState(db.isFirebaseConfigured());
+  const isDemoSession = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
 
   // Custom Confirm Dialog State
   const [confirmModal, setConfirmModal] = useState<{
@@ -754,6 +755,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Owner Operations
   const toggleMenuItem = async (itemId: string) => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Toggling menu item availability is restricted in the preview sandbox.', 'warning');
+      return;
+    }
     try {
       await db.toggleMenuAvailability(itemId);
       addToast('Menu item availability updated', 'success');
@@ -811,6 +816,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const createNewStaff = async (account: Omit<StaffAccount, 'id' | 'status'>): Promise<boolean> => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Creating new staff profiles is restricted in the preview sandbox.', 'warning');
+      return false;
+    }
     const exists = staffList.some(s => s.username.toLowerCase() === account.username.toLowerCase());
     if (exists) {
       addToast('Username already exists.', 'error');
@@ -907,6 +916,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleStaff = async (staffId: string) => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Modifying staff profiles is restricted in the preview sandbox.', 'warning');
+      return;
+    }
     const staff = staffList.find(s => s.id === staffId);
     if (!staff) return;
     const newStatus = staff.status === 'active' ? 'inactive' : 'active';
@@ -930,6 +943,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeStaff = async (staffId: string) => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Deleting staff profiles is restricted in the preview sandbox.', 'warning');
+      return;
+    }
     try {
       await db.deleteStaff(staffId);
 
@@ -949,6 +966,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Menu Management Operations
   const createNewMenuItem = async (item: Omit<MenuItem, 'id' | 'available'>): Promise<MenuItem | null> => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Creating new menu items is restricted in the preview sandbox.', 'warning');
+      return null;
+    }
     try {
       const newItem = await db.addMenuItem({
         ...item,
@@ -973,6 +994,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeMenuItem = async (itemId: string) => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Deleting menu items is restricted in the preview sandbox.', 'warning');
+      return;
+    }
     try {
       await db.deleteMenuItem(itemId);
 
@@ -991,6 +1016,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateMenuItem = async (itemId: string, updatedFields: Partial<Omit<MenuItem, 'id'>>): Promise<boolean> => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Modifying menu items is restricted in the preview sandbox.', 'warning');
+      return false;
+    }
     try {
       const itemBefore = menu.find(m => m.id === itemId);
       await db.updateMenuItem(itemId, updatedFields);
@@ -1079,6 +1108,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateToken = async (tokenId: string, updatedFields: Partial<Omit<TokenAccount, 'id'>>): Promise<boolean> => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Modifying token card configurations is restricted in the preview sandbox.', 'warning');
+      return false;
+    }
     // SECURITY: Only the owner can directly update a token account.
     // Staff must go through sellTokens() which enforces monthly limits.
     if (currentUser?.role !== 'owner') {
@@ -1118,6 +1151,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeToken = async (tokenId: string): Promise<boolean> => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Deleting token accounts is restricted in the preview sandbox.', 'warning');
+      return false;
+    }
     try {
       await db.deleteTokenAccount(tokenId);
       addToast('Token card deleted successfully.', 'success');
@@ -1174,6 +1211,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateStaffLimit = async (staffId: string, limit: number): Promise<boolean> => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Modifying staff token limits is restricted in the preview sandbox.', 'warning');
+      return false;
+    }
     // SECURITY: Only the owner can change staff token limits.
     if (currentUser?.role !== 'owner') {
       addToast('Permission denied: only the owner can update staff limits.', 'error');
@@ -1203,6 +1244,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const adjustTokens = async (studentId: string, targetTokens: number, reason: string): Promise<boolean> => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Direct manual token balance adjustments are restricted in the preview sandbox.', 'warning');
+      return false;
+    }
     if (currentUser?.role !== 'owner') {
       addToast('Permission denied: only the owner can adjust balances manually.', 'error');
       return false;
@@ -1232,6 +1277,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateSettings = async (updatedFields: Partial<Settings>): Promise<boolean> => {
+    if (isDemoSession) {
+      addToast('Demo Mode: Modifying global settings is restricted in the preview sandbox.', 'warning');
+      return false;
+    }
     if (currentUser?.role !== 'owner') {
       addToast('Permission denied: only the owner can update settings.', 'error');
       return false;
