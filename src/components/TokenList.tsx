@@ -131,25 +131,27 @@ export function TokenList({ onStartEdit, onViewHistory }: TokenListProps) {
                         year: 'numeric',
                       })}
                     </td>
-                    <td className="p-3.5 pr-5 text-right flex justify-end gap-2 shrink-0">
-                      <button
-                        onClick={() => onViewHistory(token)}
-                        className="px-3 py-1.5 h-8 min-h-0 border border-border rounded-lg text-[11px] font-bold text-text-muted hover:text-foreground hover:bg-surface-container/30 transition-colors cursor-pointer"
-                      >
-                        History
-                      </button>
-                      <button
-                        onClick={() => onStartEdit(token)}
-                        className="px-3 py-1.5 h-8 min-h-0 border border-primary/20 rounded-lg text-[11px] font-bold text-primary hover:bg-primary/5 transition-colors cursor-pointer"
-                      >
-                        Recharge
-                      </button>
-                      <button
-                        onClick={() => handleDelete(token.id, token.name, token.cardNo)}
-                        className="px-3 py-1.5 h-8 min-h-0 border border-error/20 rounded-lg text-[11px] font-bold text-error hover:bg-error/5 transition-colors cursor-pointer"
-                      >
-                        Delete
-                      </button>
+                    <td className="p-3.5 pr-5 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => onViewHistory(token)}
+                          className="px-3 py-1.5 h-8 min-h-0 border border-border rounded-lg text-[11px] font-bold text-text-muted hover:text-foreground hover:bg-surface-container/30 transition-colors cursor-pointer"
+                        >
+                          History
+                        </button>
+                        <button
+                          onClick={() => onStartEdit(token)}
+                          className="px-3 py-1.5 h-8 min-h-0 border border-primary/20 rounded-lg text-[11px] font-bold text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                        >
+                          Recharge
+                        </button>
+                        <button
+                          onClick={() => handleDelete(token.id, token.name, token.cardNo)}
+                          className="px-3 py-1.5 h-8 min-h-0 border border-error/20 rounded-lg text-[11px] font-bold text-error hover:bg-error/5 transition-colors cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

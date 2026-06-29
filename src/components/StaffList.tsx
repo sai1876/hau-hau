@@ -76,23 +76,25 @@ export function StaffList() {
                       <StatusBadge status={staff.status} />
                     </div>
                   </td>
-                  <td className="p-3.5 pr-5 text-right flex justify-end gap-2 shrink-0">
-                    <button
-                      onClick={() => toggleStaff(staff.id)}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition-colors cursor-pointer active:scale-95 ${
-                        staff.status === 'active'
-                          ? 'border-primary/20 text-primary hover:bg-primary/5'
-                          : 'border-success/20 text-[#71d384] hover:bg-success/5'
-                      }`}
-                    >
-                      {staff.status === 'active' ? 'Disable' : 'Enable'}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(staff.id, staff.name)}
-                      className="px-2.5 py-1 border border-error/20 rounded-md text-[10px] font-bold text-error hover:bg-error/5 transition-colors cursor-pointer active:scale-95"
-                    >
-                      Delete
-                    </button>
+                  <td className="p-3.5 pr-5 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => toggleStaff(staff.id)}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition-colors cursor-pointer active:scale-95 ${
+                          staff.status === 'active'
+                            ? 'border-primary/20 text-primary hover:bg-primary/5'
+                            : 'border-success/20 text-[#71d384] hover:bg-success/5'
+                        }`}
+                      >
+                        {staff.status === 'active' ? 'Disable' : 'Enable'}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(staff.id, staff.name)}
+                        className="px-2.5 py-1 border border-error/20 rounded-md text-[10px] font-bold text-error hover:bg-error/5 transition-colors cursor-pointer active:scale-95"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

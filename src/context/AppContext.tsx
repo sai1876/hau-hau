@@ -24,7 +24,7 @@ interface AppContextType {
   staffList: StaffAccount[];
   tokens: TokenAccount[];
   tokenTransactions: TokenTransaction[];
-  currentUser: { name: string; role: 'staff' | 'owner'; username: string } | null;
+  currentUser: { id?: string; uid?: string; name: string; role: 'staff' | 'owner'; username: string } | null;
   activeTable: string | null;
   tableCarts: Record<string, CartItem[]>; // tableNumber -> CartItem[]
   toasts: Array<{ id: string; message: string; type: 'success' | 'error' | 'warning' | 'info' }>;
@@ -225,6 +225,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
 
             setCurrentUser({
+              id: docSnap.id,
+              uid: docSnap.id,
               name: profile.name,
               role,
               username: profile.username
@@ -254,6 +256,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               await setDoc(docRef, ownerProfile);
               
               setCurrentUser({
+                id: firebaseUser.uid,
+                uid: firebaseUser.uid,
                 name: ownerProfile.name,
                 role: 'owner',
                 username: ownerProfile.username
@@ -451,6 +455,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if ((username === 'owner' || username === 'admin' || username === 'owner-demo') && isOwnerBypass) {
         const user = { 
+          id: username === 'owner-demo' ? 'owner_demo_uid' : 'owner_default',
+          uid: username === 'owner-demo' ? 'owner_demo_uid' : 'owner_default',
           name: username === 'owner-demo' ? 'Investor (Owner Demo)' : 'cherukuri dakshith sai', 
           role: 'owner' as const, 
           username 
@@ -489,7 +495,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const user = { name: foundStaff.name, role: 'staff' as const, username };
+        const user = { 
+          id: foundStaff.id,
+          uid: foundStaff.id,
+          name: foundStaff.name, 
+          role: 'staff' as const, 
+          username 
+        };
         setCurrentUser(user);
         localStorage.setItem('hau_hau_session', JSON.stringify(user));
         addToast(`Welcome on shift, ${foundStaff.name}!`, 'success');

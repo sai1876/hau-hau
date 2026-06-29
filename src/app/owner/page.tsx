@@ -1185,49 +1185,51 @@ export default function OwnerDashboardPage() {
                                     <td className="p-3.5">
                                       <StatusBadge status={order.orderStatus} />
                                     </td>
-                                    <td className="p-3.5 pr-5 text-right flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                      <button
-                                        onClick={() => setSelectedOrder(order)}
-                                        className="minimal-btn-secondary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                      >
-                                        Details
-                                      </button>
-                                      
-                                      {order.orderStatus === 'pending' && (
-                                        <>
-                                          <button
-                                            onClick={() => handleStatusChange(order.id, 'completed')}
-                                            className="bg-success hover:bg-[#235e26] text-white px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                          >
-                                            Complete
-                                          </button>
-                                          <button
-                                            onClick={() => handleCancelOrder(order.id)}
-                                            className="border border-error/20 hover:bg-error/5 text-error px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                          >
-                                            Cancel
-                                          </button>
-                                        </>
-                                      )}
+                                    <td className="p-3.5 pr-5 text-right" onClick={(e) => e.stopPropagation()}>
+                                      <div className="flex justify-end gap-1.5">
+                                        <button
+                                          onClick={() => setSelectedOrder(order)}
+                                          className="minimal-btn-secondary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                        >
+                                          Details
+                                        </button>
+                                        
+                                        {order.orderStatus === 'pending' && (
+                                          <>
+                                            <button
+                                              onClick={() => handleStatusChange(order.id, 'completed')}
+                                              className="bg-success hover:bg-[#235e26] text-white px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                            >
+                                              Complete
+                                            </button>
+                                            <button
+                                              onClick={() => handleCancelOrder(order.id)}
+                                              className="border border-error/20 hover:bg-error/5 text-error px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                            >
+                                              Cancel
+                                            </button>
+                                          </>
+                                        )}
 
-                                      {order.orderStatus === 'completed' && (() => {
-                                         const completedTime = (order.completedAt ? new Date(order.completedAt) : new Date(order.createdAt)).getTime();
-                                         const now = new Date().getTime();
-                                         const diffHours = (now - completedTime) / (1000 * 60 * 60);
-                                         const isRevertable = diffHours <= 1;
+                                        {order.orderStatus === 'completed' && (() => {
+                                           const completedTime = (order.completedAt ? new Date(order.completedAt) : new Date(order.createdAt)).getTime();
+                                           const now = new Date().getTime();
+                                           const diffHours = (now - completedTime) / (1000 * 60 * 60);
+                                           const isRevertable = diffHours <= 1;
 
-                                         if (!isRevertable) return null;
+                                           if (!isRevertable) return null;
 
-                                         return (
-                                           <button
-                                             onClick={() => handleStatusChange(order.id, 'pending')}
-                                             className="border border-primary/20 hover:bg-primary/5 text-primary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
-                                             title="Revert to Pending"
-                                           >
-                                             Revert
-                                           </button>
-                                         );
-                                       })()}
+                                           return (
+                                             <button
+                                               onClick={() => handleStatusChange(order.id, 'pending')}
+                                               className="border border-primary/20 hover:bg-primary/5 text-primary px-3 py-1.5 h-9 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all"
+                                               title="Revert to Pending"
+                                             >
+                                               Revert
+                                             </button>
+                                           );
+                                         })()}
+                                      </div>
                                     </td>
                                   </tr>
                                 </React.Fragment>
@@ -1309,29 +1311,31 @@ export default function OwnerDashboardPage() {
                           <td className="p-3.5">
                             <StatusBadge status={item.available ? 'active' : 'inactive'} />
                           </td>
-                          <td className="p-3.5 pr-5 text-right flex justify-end gap-1.5">
-                            <button
-                              onClick={() => toggleMenuItem(item.id)}
-                              className={`px-3 py-1.5 h-9 min-h-0 text-xs font-bold border rounded-lg transition-colors cursor-pointer active:scale-95 ${
-                                item.available
-                                  ? 'border-primary/20 text-primary hover:bg-primary/5'
-                                  : 'border-success/20 text-success hover:bg-success/5'
-                              }`}
-                            >
-                              {item.available ? 'Deactivate' : 'Activate'}
-                            </button>
-                            <button
-                              onClick={() => handleStartEdit(item)}
-                              className="px-3 py-1.5 h-9 min-h-0 border border-border rounded-lg text-xs font-bold text-foreground hover:bg-surface-container/30 transition-colors cursor-pointer active:scale-95"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteMenuItem(item.id, item.name)}
-                              className="px-3 py-1.5 h-9 min-h-0 border border-error/20 rounded-lg text-xs font-bold text-error hover:bg-error/5 transition-colors cursor-pointer active:scale-95"
-                            >
-                              Delete
-                            </button>
+                          <td className="p-3.5 pr-5 text-right">
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                onClick={() => toggleMenuItem(item.id)}
+                                className={`px-3 py-1.5 h-9 min-h-0 text-xs font-bold border rounded-lg transition-colors cursor-pointer active:scale-95 ${
+                                  item.available
+                                    ? 'border-primary/20 text-primary hover:bg-primary/5'
+                                    : 'border-success/20 text-success hover:bg-success/5'
+                                }`}
+                              >
+                                {item.available ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                onClick={() => handleStartEdit(item)}
+                                className="px-3 py-1.5 h-9 min-h-0 border border-border rounded-lg text-xs font-bold text-foreground hover:bg-surface-container/30 transition-colors cursor-pointer active:scale-95"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteMenuItem(item.id, item.name)}
+                                className="px-3 py-1.5 h-9 min-h-0 border border-error/20 rounded-lg text-xs font-bold text-error hover:bg-error/5 transition-colors cursor-pointer active:scale-95"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1481,12 +1485,12 @@ export default function OwnerDashboardPage() {
           {activeWorkspace === 'staff' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-slide-in">
               {/* Staff List */}
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 min-w-0">
                 <StaffList />
               </div>
 
               {/* Create Staff Form */}
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 min-w-0">
                 <StaffAccountForm />
               </div>
             </div>
@@ -1497,12 +1501,12 @@ export default function OwnerDashboardPage() {
             <div className="flex flex-col gap-6 animate-slide-in">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 {/* Token Cards List */}
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 min-w-0">
                   <TokenList onStartEdit={setEditingToken} onViewHistory={setHistoryToken} />
                 </div>
 
                 {/* Create/Edit Token Card Form */}
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-1 min-w-0">
                   <TokenAccountForm
                     editingToken={editingToken}
                     onCancelEdit={() => setEditingToken(null)}
@@ -1718,17 +1722,78 @@ export default function OwnerDashboardPage() {
                         </thead>
                         <tbody className="divide-y divide-border">
                           {filteredLogs.map(log => {
-                            let actionLabel = log.action;
-                            let actionColor = 'text-foreground bg-surface-container';
+                            const getActionDisplay = (action: string) => {
+                              const mapping: Record<string, string> = {
+                                staffCreated: 'Staff Registered',
+                                staffDeactivated: 'Staff Deactivated',
+                                staffRemoved: 'Staff Removed',
+                                orderCreated: 'Order Placed',
+                                orderCompleted: 'Order Completed',
+                                orderCancelled: 'Order Cancelled',
+                                menuItemCreated: 'Menu Item Created',
+                                menuItemUpdated: 'Menu Item Updated',
+                                menuItemDeleted: 'Menu Item Deleted',
+                                tokenRecharged: 'Token Recharged',
+                                tokenDeducted: 'Token Deducted',
+                                tokenRefunded: 'Token Refunded',
+                                tokenAdjusted: 'Token Adjusted',
+                                monthlyLimitChanged: 'Limit Changed',
+                                settingsUpdated: 'Settings Updated',
+                              };
+                              return mapping[action] || action;
+                            };
+
+                            const formatTableNumber = (tableNum: any) => {
+                              if (!tableNum) return 'N/A';
+                              const str = String(tableNum);
+                              if (str.toLowerCase() === 'self') return 'Self-Service';
+                              if (str.toLowerCase().startsWith('table')) {
+                                return str;
+                              }
+                              return `Table ${str}`;
+                            };
+
+                            let actionLabel = getActionDisplay(log.action).toUpperCase();
+                            let actionColor = 'text-foreground bg-surface-container border border-border';
                             
-                            if (log.action.includes('Created')) {
-                              actionColor = 'text-success bg-success/5 border border-success/15';
-                            } else if (log.action.includes('Deactivated') || log.action.includes('Removed') || log.action.includes('Cancelled')) {
-                              actionColor = 'text-error bg-error/5 border border-error/15';
-                            } else if (log.action.includes('Deducted')) {
-                              actionColor = 'text-blue-400 bg-blue-500/5 border border-blue-500/10';
-                            } else if (log.action.includes('Recharged') || log.action.includes('Refunded')) {
-                              actionColor = 'text-primary bg-primary/5 border border-primary/10';
+                            switch (log.action) {
+                              case 'orderCompleted':
+                              case 'orderCreated':
+                                actionColor = 'text-success bg-success/10 border border-success/20';
+                                break;
+                              case 'staffCreated':
+                              case 'menuItemCreated':
+                                actionColor = 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
+                                break;
+                              case 'tokenRefunded':
+                                actionColor = 'text-teal-400 bg-teal-500/10 border border-teal-500/20';
+                                break;
+                              case 'orderCancelled':
+                              case 'staffDeactivated':
+                                actionColor = 'text-error bg-error/10 border border-error/20';
+                                break;
+                              case 'staffRemoved':
+                              case 'menuItemDeleted':
+                                actionColor = 'text-red-400 bg-red-500/10 border border-red-500/20';
+                                break;
+                              case 'tokenRecharged':
+                                actionColor = 'text-primary bg-primary/10 border border-primary/20';
+                                break;
+                              case 'tokenDeducted':
+                                actionColor = 'text-blue-400 bg-blue-500/10 border border-blue-500/20';
+                                break;
+                              case 'tokenAdjusted':
+                                actionColor = 'text-amber-400 bg-amber-500/10 border border-amber-500/20';
+                                break;
+                              case 'monthlyLimitChanged':
+                                actionColor = 'text-purple-400 bg-purple-500/10 border border-purple-500/20';
+                                break;
+                              case 'menuItemUpdated':
+                                actionColor = 'text-indigo-400 bg-indigo-500/10 border border-indigo-500/20';
+                                break;
+                              case 'settingsUpdated':
+                                actionColor = 'text-zinc-400 bg-zinc-500/10 border border-zinc-500/20';
+                                break;
                             }
 
                             let details = '';
@@ -1750,15 +1815,15 @@ export default function OwnerDashboardPage() {
                               const creditAfter = log.after.balanceRupees || 0;
                               details = `Manual balance correction: ${tokensBefore} → ${tokensAfter} tokens, ₹${creditBefore} → ₹${creditAfter} credit${log.after.reason ? ` (${log.after.reason})` : ''}`;
                             } else if (log.action === 'orderCreated' && log.after) {
-                              details = `Order placed for Table ${log.after.tableNumber} · ₹${log.after.total} via ${log.after.paymentMode || 'cash'}`;
+                              details = `Placed order for ${formatTableNumber(log.after.tableNumber)} · ₹${log.after.total} via ${log.after.paymentMode || 'cash'}`;
                             } else if (log.action === 'orderCompleted' && log.before) {
-                              details = `Order marked as completed`;
+                              details = `Order completed successfully`;
                             } else if (log.action === 'orderCancelled' && log.before) {
-                              details = `Order cancelled (was: ${log.before.orderStatus})`;
+                              details = `Order cancelled (previous status: ${log.before.orderStatus})`;
                             } else if (log.action === 'staffCreated' && log.after) {
-                              details = `New staff account: ${log.after.name || log.after.username || ''}`;
+                              details = `Registered new staff account: @${log.after.username || ''} (${log.after.name || ''})`;
                             } else if (log.action === 'staffDeactivated' && log.before) {
-                              details = `Staff deactivated (was: ${log.before.status})`;
+                              details = `Deactivated staff account: @${log.before.username || ''} (${log.before.name || ''})`;
                             } else if (log.action === 'staffRemoved') {
                               details = `Staff account permanently removed`;
                             } else if (log.action === 'menuItemCreated' && log.after) {
@@ -1780,6 +1845,29 @@ export default function OwnerDashboardPage() {
                               details = 'N/A';
                             }
 
+                            const getActorName = () => {
+                              if (log.actorUid === 'local') return 'Local System';
+                              const found = staffList.find(s => s.id === log.actorUid);
+                              if (found) return found.name;
+                              if (currentUser && (currentUser.id === log.actorUid || currentUser.uid === log.actorUid)) {
+                                return currentUser.name;
+                              }
+                              return log.actorRole === 'owner' ? 'Owner' : 'Staff Member';
+                            };
+                            
+                            const getActorRoleLabel = () => {
+                              if (log.actorUid === 'local') return 'system';
+                              const found = staffList.find(s => s.id === log.actorUid);
+                              if (found) return found.role || 'staff';
+                              if (currentUser && (currentUser.id === log.actorUid || currentUser.uid === log.actorUid)) {
+                                return currentUser.role;
+                              }
+                              return log.actorRole || 'staff';
+                            };
+
+                            const actorName = getActorName();
+                            const actorRole = getActorRoleLabel();
+
                             return (
                               <tr key={log.id} className="hover:bg-surface-container/10 transition-colors">
                                 <td className="p-3.5 pl-5 font-mono text-text-muted">
@@ -1792,18 +1880,29 @@ export default function OwnerDashboardPage() {
                                   })}
                                 </td>
                                 <td className="p-3.5">
-                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${actionColor}`}>
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${actionColor}`}>
                                     {actionLabel}
                                   </span>
                                 </td>
                                 <td className="p-3.5 font-semibold text-foreground">
-                                  <div className="flex flex-col">
-                                    <span>{log.actorRole === 'owner' ? 'Sarah (Owner)' : 'Staff Member'}</span>
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                                      {actorName}
+                                      <span className={`text-[9px] px-1.5 py-0.2 border rounded-sm font-bold uppercase ${
+                                        actorRole === 'owner'
+                                          ? 'bg-primary/10 border-primary/20 text-primary'
+                                          : actorRole === 'system'
+                                            ? 'bg-zinc-500/10 border-zinc-500/20 text-zinc-400'
+                                            : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                      }`}>
+                                        {actorRole === 'owner' ? 'Owner' : actorRole === 'system' ? 'System' : 'Staff'}
+                                      </span>
+                                    </span>
                                     <span className="text-[9px] text-text-muted font-mono">{log.actorUid}</span>
                                   </div>
                                 </td>
                                 <td className="p-3.5 font-mono text-text-muted">#{log.targetId}</td>
-                                <td className="p-3.5 font-semibold text-text-muted italic">{details}</td>
+                                <td className="p-3.5 font-medium text-text-muted">{details}</td>
                               </tr>
                             );
                           })}
