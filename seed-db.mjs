@@ -113,7 +113,7 @@ async function seed() {
 
     // Read production values with safe defaults
     const ownerEmail = env.PRODUCTION_OWNER_EMAIL || 'cherukuridakshithsai@gmail.com';
-    const ownerPassword = env.PRODUCTION_OWNER_PASSWORD || 'owner123';
+    const ownerPassword = env.PRODUCTION_OWNER_PASSWORD || 'Sai@011325';
     const staffEmail = env.PRODUCTION_STAFF_EMAIL || 'staff@hauhau.com';
     const staffPassword = env.PRODUCTION_STAFF_PASSWORD || 'staff123';
     

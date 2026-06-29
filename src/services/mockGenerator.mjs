@@ -23,10 +23,10 @@ export function generateMockData(now = new Date()) {
     },
     {
       id: 'owner_default',
-      name: 'Sarah (Owner)',
-      emailOrPhone: 'owner@hauhau.com',
-      username: 'owner',
-      password: '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9', // 'owner123'
+      name: 'cherukuri dakshith sai',
+      emailOrPhone: 'cherukuridakshithsai@gmail.com',
+      username: 'admin',
+      password: '01e084a4d6bc824806aa4c473a367f0d4ad73f5baf452ab2c4c6845265900440', // 'Sai@011325'
       status: 'active',
       role: 'owner',
       outletId: DEFAULT_OUTLET_ID

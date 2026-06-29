@@ -297,7 +297,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let email = username;
 
     // Map usernames to emails for Firebase Auth
-    if (username === 'owner') {
+    if (username === 'owner' || username === 'admin') {
       email = process.env.NEXT_PUBLIC_PRODUCTION_OWNER_EMAIL || 'cherukuridakshithsai@gmail.com';
     } else if (username === 'owner-demo') {
       email = 'owner-demo@hauhau.com';
@@ -359,13 +359,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         password === 'owner' || 
         password === 'owner123' ||
         password === 'demo123' ||
+        password === 'Sai@011325' ||
         inputHash === '4c1029697ee358715d3a14a2add817c4b01651440de808371f78165ac90dc581' || // 'owner'
         inputHash === '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9' || // 'owner123'
+        inputHash === '01e084a4d6bc824806aa4c473a367f0d4ad73f5baf452ab2c4c6845265900440' || // 'Sai@011325'
         inputHash === 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791';  // 'demo123'
 
-      if ((username === 'owner' || username === 'owner-demo') && isOwnerBypass) {
+      if ((username === 'owner' || username === 'admin' || username === 'owner-demo') && isOwnerBypass) {
         const user = { 
-          name: username === 'owner-demo' ? 'Investor (Owner Demo)' : 'Sarah (Owner)', 
+          name: username === 'owner-demo' ? 'Investor (Owner Demo)' : 'cherukuri dakshith sai', 
           role: 'owner' as const, 
           username 
         };
