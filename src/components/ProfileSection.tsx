@@ -58,8 +58,9 @@ export function ProfileSection() {
   const staffTransactions = tokenTransactions.filter(
     tx => tx.soldBy === currentUser.username
   );
-  const staffTokensSold = staffTransactions.reduce((sum, tx) => sum + tx.tokens, 0);
-  const staffRupeesCollected = staffTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const staffRecharges = staffTransactions.filter(tx => tx.type === 'recharge');
+  const staffTokensSold = staffRecharges.reduce((sum, tx) => sum + tx.tokens, 0);
+  const staffRupeesCollected = staffRecharges.reduce((sum, tx) => sum + tx.amount, 0);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();

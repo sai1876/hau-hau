@@ -1534,13 +1534,14 @@ export default function OwnerDashboardPage() {
                       {staffList.map((staff) => {
                         const now = new Date();
                         const staffTxs = tokenTransactions.filter(tx => tx.soldBy === staff.username);
-                        const currentMonthTxs = staffTxs.filter(tx => {
+                        const staffRecharges = staffTxs.filter(tx => tx.type === 'recharge');
+                        const currentMonthTxs = staffRecharges.filter(tx => {
                           const d = new Date(tx.createdAt);
                           return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
                         });
                         const tokensSoldThisMonth = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
-                        const tokensSoldAllTime = staffTxs.reduce((sum, tx) => sum + tx.tokens, 0);
-                        const amountCollected = staffTxs.reduce((sum, tx) => sum + tx.amount, 0);
+                        const tokensSoldAllTime = staffRecharges.reduce((sum, tx) => sum + tx.tokens, 0);
+                        const amountCollected = staffRecharges.reduce((sum, tx) => sum + tx.amount, 0);
                         const limit = staff.monthlyTokenLimit ?? 1000;
                         const remaining = Math.max(0, limit - tokensSoldThisMonth);
                         const usagePct = limit > 0 ? Math.min(100, (tokensSoldThisMonth / limit) * 100) : 0;
@@ -2251,12 +2252,13 @@ export default function OwnerDashboardPage() {
       {selectedStaffDetail && (() => {
         const now = new Date();
         const staffTxs = tokenTransactions.filter(tx => tx.soldBy === selectedStaffDetail.username);
-        const currentMonthTxs = staffTxs.filter(tx => {
+        const staffRecharges = staffTxs.filter(tx => tx.type === 'recharge');
+        const currentMonthTxs = staffRecharges.filter(tx => {
           const d = new Date(tx.createdAt);
           return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
         const tokensSoldThisMonth = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
-        const amountCollected = staffTxs.reduce((sum, tx) => sum + tx.amount, 0);
+        const amountCollected = staffRecharges.reduce((sum, tx) => sum + tx.amount, 0);
         const limit = selectedStaffDetail.monthlyTokenLimit ?? 1000;
         const remaining = Math.max(0, limit - tokensSoldThisMonth);
         const usagePct = limit > 0 ? Math.min(100, (tokensSoldThisMonth / limit) * 100) : 0;

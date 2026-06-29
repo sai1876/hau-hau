@@ -118,6 +118,7 @@ export default function StaffDashboardPage() {
     const todayStr = new Date().toLocaleDateString('en-CA');
     return tokenTransactions.filter(tx => {
       if (tx.soldBy !== currentUser?.username) return false;
+      if (tx.type !== 'recharge') return false;
       const txDateStr = new Date(tx.createdAt).toLocaleDateString('en-CA');
       return txDateStr === todayStr;
     });
@@ -226,6 +227,7 @@ export default function StaffDashboardPage() {
   const now = new Date();
   const currentMonthTxs = tokenTransactions.filter(tx => {
     if (tx.soldBy !== currentUser.username) return false;
+    if (tx.type !== 'recharge') return false;
     const d = new Date(tx.createdAt);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });

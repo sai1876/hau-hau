@@ -1122,6 +1122,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const now = new Date();
       const currentMonthTxs = tokenTransactions.filter(tx => {
         if (tx.soldBy !== currentUser.username) return false;
+        if (tx.type !== 'recharge') return false;
         const txDate = new Date(tx.createdAt);
         return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
       });
@@ -1237,6 +1238,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const now = new Date();
       const currentMonthTxs = tokenTransactions.filter(tx => {
         if (tx.soldBy !== currentUser.username) return false;
+        if (tx.type !== 'recharge') return false;
         const txDate = new Date(tx.createdAt);
         return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
       });
