@@ -66,7 +66,7 @@ export async function POST(req: Request) {
 
           const txsSnap = await txsQuery.get();
           let totalRechargedThisMonth = 0;
-          txsSnap.forEach(doc => {
+          txsSnap.forEach((doc: any) => {
             totalRechargedThisMonth += doc.data().tokens || 0;
           });
 
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
         }
       }
 
-      await dbAdmin.runTransaction(async (transaction) => {
+      await dbAdmin.runTransaction(async (transaction: any) => {
         const settingsDoc = await transaction.get(settingsDocRef);
         const rate = settingsDoc.exists ? (settingsDoc.data()?.tokenValueInRupees || 30) : 30;
         const amount = initialTokens * rate;

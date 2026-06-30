@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { dbAdmin } from '../../../../services/firebaseAdmin';
+import { firestore } from '../../../../services/firebase';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 export async function GET(req: Request) {
   try {
@@ -29,13 +30,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ email: 'staff-demo@hauhau.com' });
     }
 
-    if (!dbAdmin) {
+    if (!firestore) {
       return NextResponse.json({ email: username });
     }
 
-    // Query Firestore staff collection for custom username match
-    const staffRef = dbAdmin.collection('staff');
-    const snapshot = await staffRef.where('username', '==', username).limit(1).get();
+    // Query Firestore staff collection for custom username match using client SDK
+    const staffCol = collection(firestore, 'staff');
+    const q = query(staffCol, where('username', '==', username), limit(1));
+    const snapshot = await getDocs(q);
 
     if (!snapshot.empty) {
       const doc = snapshot.docs[0];
@@ -43,7 +45,7 @@ export async function GET(req: Request) {
     }
 
     // Case insensitive fallback query
-    const allStaff = await staffRef.get();
+    const allStaff = await getDocs(staffCol);
     for (const doc of allStaff.docs) {
       const data = doc.data();
       if (data.username && data.username.toLowerCase() === lowerUsername) {

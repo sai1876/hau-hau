@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       const txDocRef = dbAdmin.collection('token_transactions').doc();
       const auditDocRef = dbAdmin.collection('audit_logs').doc();
 
-      const result = await dbAdmin.runTransaction(async (transaction) => {
+      const result = await dbAdmin.runTransaction(async (transaction: any) => {
         const tokenDoc = await transaction.get(tokenDocRef);
         if (!tokenDoc.exists) {
           throw new Error('Token account not found.');

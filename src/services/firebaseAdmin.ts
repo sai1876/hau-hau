@@ -33,7 +33,14 @@ if (!apps.length) {
   app = apps[0];
 }
 
-const dbAdmin = app ? getFirestore(app) : null;
-const authAdmin = app ? getAuth(app) : null;
+let dbAdmin: any = null;
+let authAdmin: any = null;
+
+try {
+  dbAdmin = app ? getFirestore(app) : null;
+  authAdmin = app ? getAuth(app) : null;
+} catch (e) {
+  console.warn("Firebase Admin service initialization failed:", e);
+}
 
 export { dbAdmin, authAdmin };

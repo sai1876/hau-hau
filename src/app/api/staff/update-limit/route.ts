@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const staffDocRef = dbAdmin.collection('staff').doc(staffId);
     const auditDocRef = dbAdmin.collection('audit_logs').doc();
 
-    await dbAdmin.runTransaction(async (transaction) => {
+    await dbAdmin.runTransaction(async (transaction: any) => {
       const staffDoc = await transaction.get(staffDocRef);
       if (!staffDoc.exists) {
         throw new Error('Staff account not found.');
