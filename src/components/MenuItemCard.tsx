@@ -96,7 +96,7 @@ export function MenuItemCard({ item, onCustomize }: MenuItemCardProps) {
           <span className="font-bold text-foreground text-sm leading-tight group-hover:text-white transition-colors pr-6">
             {item.name}
           </span>
-          <div className="flex gap-1.5 shrink-0 items-center">
+          <div className={`flex gap-1.5 shrink-0 items-center ${quantity > 0 ? 'pr-7' : ''}`}>
             {item.customizable && (
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 flex items-center gap-0.5 whitespace-nowrap">
                 <Sliders size={10} weight="bold" /> Custom

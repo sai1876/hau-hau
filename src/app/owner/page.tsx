@@ -40,7 +40,8 @@ import { DocsWorkspace } from '@/components/DocsWorkspace';
 export default function OwnerDashboardPage() {
   const router = useRouter();
   const { 
-    currentUser, 
+    currentUser,
+    authLoading,
     logout, 
     orders, 
     updateOrderStatus,
@@ -57,7 +58,9 @@ export default function OwnerDashboardPage() {
     auditLogs,
     updateSettings,
     usingFirebase,
-    syncDataToCloud
+    syncDataToCloud,
+    sellTokens,
+    addToast
   } = useApp();
 
   // Navigation Tabs for Command Center
@@ -69,6 +72,7 @@ export default function OwnerDashboardPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingToken, setEditingToken] = useState<TokenAccount | null>(null);
   const [historyToken, setHistoryToken] = useState<TokenAccount | null>(null);
+  const [rechargeToken, setRechargeToken] = useState<TokenAccount | null>(null);
   const [selectedStaffDetail, setSelectedStaffDetail] = useState<StaffAccount | null>(null);
   const [editingLimitValue, setEditingLimitValue] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -81,17 +85,20 @@ export default function OwnerDashboardPage() {
   const [currency, setCurrency] = useState('INR');
   const [receiptFooter, setReceiptFooter] = useState('');
   const [monthlyTokenLimitDefaults, setMonthlyTokenLimitDefaults] = useState('');
-  const [grokApiKey, setGrokApiKey] = useState('');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setGrokApiKey(localStorage.getItem('hau_hau_grok_api_key') || '');
-    }
-  }, []);
 
   // Audit search & filter state
   const [auditQuery, setAuditQuery] = useState('');
   const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
+
+  // Authenticate check — wait for auth to resolve before redirecting
+  useEffect(() => {
+    if (authLoading) return;
+    if (!currentUser) {
+      router.push('/login');
+    } else if (currentUser.role !== 'owner') {
+      router.push('/staff');
+    }
+  }, [authLoading, currentUser, router]);
 
   // Sync settings values
   useEffect(() => {
@@ -193,7 +200,6 @@ export default function OwnerDashboardPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-grok-api-key': grokApiKey,
         },
         body: JSON.stringify({
           action: 'forecast',
@@ -235,7 +241,6 @@ export default function OwnerDashboardPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-grok-api-key': grokApiKey,
         },
         body: JSON.stringify({
           action: 'menu-pricing',
@@ -382,13 +387,13 @@ export default function OwnerDashboardPage() {
 
     const parsedPrice = parseFloat(itemPrice);
     if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      alert('Please enter a valid price.');
+      addToast('Please enter a valid price.', 'error');
       return;
     }
 
     const finalCategory = itemCategory === '__custom__' ? customCategory.trim() : itemCategory;
     if (!finalCategory) {
-      alert('Please enter or select a category.');
+      addToast('Please enter or select a category.', 'error');
       return;
     }
 
@@ -455,13 +460,13 @@ export default function OwnerDashboardPage() {
 
     const parsedPrice = parseFloat(editPrice);
     if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      alert('Please enter a valid price.');
+      addToast('Please enter a valid price.', 'error');
       return;
     }
 
     const finalCategory = editCategory === '__custom__' ? editCustomCategory.trim() : editCategory;
     if (!finalCategory) {
-      alert('Please enter or select a category.');
+      addToast('Please enter or select a category.', 'error');
       return;
     }
 
@@ -666,11 +671,19 @@ export default function OwnerDashboardPage() {
     );
   };
 
+  if (authLoading || !currentUser || currentUser.role !== 'owner') {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background text-text-muted font-bold text-xs uppercase tracking-widest min-h-screen">
+        Verifying Session...
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-background min-h-screen">
       {/* Demo Banner */}
       {(currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo') && (
-        <div className="bg-gradient-to-r from-red-700 via-rose-600 to-red-700 text-white text-center py-2 px-4 text-[10px] sm:text-xs font-bold tracking-wider uppercase border-b border-red-800 shadow-md relative z-50 flex items-center justify-center gap-2 shrink-0 select-none">
+        <div className="bg-linear-to-r from-red-700 via-rose-600 to-red-700 text-white text-center py-2 px-4 text-[10px] sm:text-xs font-bold tracking-wider uppercase border-b border-red-800 shadow-md relative z-50 flex items-center justify-center gap-2 shrink-0 select-none">
           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />
           <span>This is a demo fake page. Access to original accounts cannot be provided for college verification.</span>
         </div>
@@ -756,7 +769,7 @@ export default function OwnerDashboardPage() {
             
             <hr className="border-border shrink-0" />
             
-            <nav className="flex flex-col gap-1.5 overflow-y-auto flex-1 pr-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <nav className="flex flex-col gap-1.5 overflow-y-auto flex-1 pr-0.5 scrollbar-none">
               {(['overview', 'orders', 'menu', 'staff', 'tokens', 'audit', 'settings', 'docs', 'profile'] as const).map((space) => {
                 const isSelected = activeWorkspace === space;
                 const sidebarLabels: Record<string, { icon: React.ReactNode; text: string }> = {
@@ -969,7 +982,7 @@ export default function OwnerDashboardPage() {
                       <p className="text-xs text-text-muted font-semibold text-center py-4">No active staff right now</p>
                     ) : (
                       activeStaffPreview.map((staff) => {
-                        const staffOrdersCount = filteredByDateOrders.filter(o => o.staffId === staff.username).length;
+                        const staffOrdersCount = filteredByDateOrders.filter(o => o.staffId === staff.id || o.staffId === staff.username).length;
                         return (
                           <div key={staff.id} className="flex items-center justify-between p-3 bg-surface-container/20 border border-border rounded-lg text-xs">
                             <div className="flex items-center gap-2.5">
@@ -1063,7 +1076,7 @@ export default function OwnerDashboardPage() {
                               </div>
                               <div className="w-full h-2 bg-surface border border-border rounded-full overflow-hidden">
                                 <div 
-                                  className="h-full bg-gradient-to-r from-primary to-orange-400 rounded-full transition-all duration-500" 
+                                  className="h-full bg-linear-to-r from-primary to-orange-400 rounded-full transition-all duration-500" 
                                   style={{ width: `${percentWidth}%` }}
                                 />
                               </div>
@@ -1565,7 +1578,11 @@ export default function OwnerDashboardPage() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 {/* Token Cards List */}
                 <div className="lg:col-span-2 min-w-0">
-                  <TokenList onStartEdit={setEditingToken} onViewHistory={setHistoryToken} />
+                  <TokenList 
+                    onStartEdit={setEditingToken} 
+                    onViewHistory={setHistoryToken} 
+                    onRecharge={setRechargeToken} 
+                  />
                 </div>
 
                 {/* Create/Edit Token Card Form */}
@@ -1609,11 +1626,12 @@ export default function OwnerDashboardPage() {
                         const tokensSoldThisMonth = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
                         const tokensSoldAllTime = staffRecharges.reduce((sum, tx) => sum + tx.tokens, 0);
                         const amountCollected = staffRecharges.reduce((sum, tx) => sum + tx.amount, 0);
+                        const isOwnerOperator = staff.role === 'owner' || staff.username === 'admin';
                         const limit = staff.monthlyTokenLimit ?? 1000;
-                        const remaining = Math.max(0, limit - tokensSoldThisMonth);
-                        const usagePct = limit > 0 ? Math.min(100, (tokensSoldThisMonth / limit) * 100) : 0;
-                        const isNearLimit = usagePct >= 80;
-                        const isOverLimit = usagePct >= 100;
+                        const remaining = isOwnerOperator ? Infinity : Math.max(0, limit - tokensSoldThisMonth);
+                        const usagePct = isOwnerOperator ? 0 : (limit > 0 ? Math.min(100, (tokensSoldThisMonth / limit) * 100) : 0);
+                        const isNearLimit = !isOwnerOperator && usagePct >= 80;
+                        const isOverLimit = !isOwnerOperator && usagePct >= 100;
 
                         return (
                           <button
@@ -1654,13 +1672,13 @@ export default function OwnerDashboardPage() {
                                 <span className="text-[10px] text-text-muted font-bold">Monthly Usage</span>
                                 <span className={`text-xs font-mono font-bold ${
                                   isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-foreground'
-                                }`}>{tokensSoldThisMonth.toFixed(0)} / {limit} <TokenIcon className="ml-1 w-3.5 h-3.5" /></span>
+                                }`}>{tokensSoldThisMonth.toFixed(0)} / {isOwnerOperator ? 'Unlimited' : limit} <TokenIcon className="ml-1 w-3.5 h-3.5" /></span>
                               </div>
                               <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden border border-border">
                                 <div
-                                  style={{ width: `${usagePct}%` }}
+                                  style={{ width: `${isOwnerOperator ? 100 : usagePct}%` }}
                                   className={`h-full rounded-full transition-all ${
-                                    isOverLimit ? 'bg-error' : isNearLimit ? 'bg-warning' : 'bg-primary'
+                                    isOwnerOperator ? 'bg-blue-500/40' : (isOverLimit ? 'bg-error' : isNearLimit ? 'bg-warning' : 'bg-primary')
                                   }`}
                                 />
                               </div>
@@ -1671,9 +1689,9 @@ export default function OwnerDashboardPage() {
                               <div className="bg-surface-container/40 border border-border rounded-lg p-2.5 flex flex-col gap-0.5">
                                 <span className="text-[9px] text-text-muted font-bold">Remaining</span>
                                 <span className={`text-sm font-bold font-mono ${
-                                  isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-[#71d384]'
-                                }`}>{remaining.toFixed(0)}</span>
-                                <span className="text-[9px] text-text-muted">tokens left</span>
+                                  isOwnerOperator ? 'text-blue-450' : (isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-[#71d384]')
+                                }`}>{isOwnerOperator ? '∞' : remaining.toFixed(0)}</span>
+                                <span className="text-[9px] text-text-muted">{isOwnerOperator ? 'unlimited' : 'tokens left'}</span>
                               </div>
                               <div className="bg-surface-container/40 border border-border rounded-lg p-2.5 flex flex-col gap-0.5">
                                 <span className="text-[9px] text-text-muted font-bold">All-Time</span>
@@ -1987,11 +2005,11 @@ export default function OwnerDashboardPage() {
                   const val = parseFloat(tokenValueInRupees);
                   const limit = parseInt(monthlyTokenLimitDefaults);
                   if (isNaN(val) || val <= 0) {
-                    alert('Token conversion rate must be positive.');
+                    addToast('Token conversion rate must be positive.', 'error');
                     return;
                   }
                   if (isNaN(limit) || limit < 0) {
-                    alert('Default monthly token limit must be positive.');
+                    addToast('Default monthly token limit must be positive.', 'error');
                     return;
                   }
                   await updateSettings({
@@ -2127,31 +2145,7 @@ export default function OwnerDashboardPage() {
                   </div>
                 </div>
 
-                <div className="minimal-card rounded-xl bg-surface border border-border p-4.5 text-xs shadow-sm flex flex-col gap-3">
-                  <h4 className="font-bold text-foreground flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                    Grok AI Configuration
-                  </h4>
-                  <p className="text-text-muted leading-relaxed">
-                    Provide your xAI Grok API Key to enable demand forecasting, menu pricing recommendations, and real-time kitchen pacing.
-                  </p>
-                  <div className="flex flex-col gap-1.5 mt-1">
-                    <label className="text-[10px] text-text-muted font-bold uppercase">Grok API Key</label>
-                    <input
-                      type="password"
-                      placeholder="xai-..."
-                      value={grokApiKey}
-                      onChange={(e) => {
-                        setGrokApiKey(e.target.value);
-                        localStorage.setItem('hau_hau_grok_api_key', e.target.value);
-                      }}
-                      className="minimal-input px-3.5 py-2.5 text-xs text-white font-mono"
-                    />
-                    <span className="text-[10px] text-text-muted leading-relaxed">
-                      For testing without an API key, leave blank or enter <code className="font-mono text-primary bg-primary/5 px-1 py-0.5 rounded">grok-mock</code> to run in Demo mode.
-                    </span>
-                  </div>
-                </div>
+                {/* Grok AI settings are securely handled server-side using GROQ_API_KEYS env variable */}
 
                 <div className="minimal-card rounded-xl bg-surface border border-border p-4.5 text-xs shadow-sm flex flex-col gap-3">
                   <h4 className="font-bold text-foreground flex items-center gap-1.5">
@@ -2535,11 +2529,12 @@ export default function OwnerDashboardPage() {
         });
         const tokensSoldThisMonth = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
         const amountCollected = staffRecharges.reduce((sum, tx) => sum + tx.amount, 0);
+        const isOwnerOperator = selectedStaffDetail.role === 'owner' || selectedStaffDetail.username === 'admin';
         const limit = selectedStaffDetail.monthlyTokenLimit ?? 1000;
-        const remaining = Math.max(0, limit - tokensSoldThisMonth);
-        const usagePct = limit > 0 ? Math.min(100, (tokensSoldThisMonth / limit) * 100) : 0;
-        const isNearLimit = usagePct >= 80;
-        const isOverLimit = usagePct >= 100;
+        const remaining = isOwnerOperator ? Infinity : Math.max(0, limit - tokensSoldThisMonth);
+        const usagePct = isOwnerOperator ? 0 : (limit > 0 ? Math.min(100, (tokensSoldThisMonth / limit) * 100) : 0);
+        const isNearLimit = !isOwnerOperator && usagePct >= 80;
+        const isOverLimit = !isOwnerOperator && usagePct >= 100;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fade-in" onClick={() => setSelectedStaffDetail(null)}>
             <div className="bg-surface border border-border w-full max-w-lg max-h-[90vh] rounded-xl overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -2562,10 +2557,10 @@ export default function OwnerDashboardPage() {
                     <span className="text-xl font-bold font-mono text-primary">{tokensSoldThisMonth.toFixed(0)}</span>
                     <span className="text-[10px] text-text-muted">tokens sold</span>
                   </div>
-                  <div className={`bg-surface-container/40 border rounded-xl p-3 flex flex-col gap-1 ${isOverLimit ? 'border-error/30' : isNearLimit ? 'border-warning/30' : 'border-border'}`}>
+                  <div className={`bg-surface-container/40 border rounded-xl p-3 flex flex-col gap-1 ${isOwnerOperator ? 'border-border' : (isOverLimit ? 'border-error/30' : isNearLimit ? 'border-warning/30' : 'border-border')}`}>
                     <span className="text-[10px] text-text-muted font-bold">Remaining</span>
-                    <span className={`text-xl font-bold font-mono ${isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-[#71d384]'}`}>{remaining.toFixed(0)}</span>
-                    <span className="text-[10px] text-text-muted">tokens left</span>
+                    <span className={`text-xl font-bold font-mono ${isOwnerOperator ? 'text-blue-450' : (isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-[#71d384]')}`}>{isOwnerOperator ? '∞' : remaining.toFixed(0)}</span>
+                    <span className="text-[10px] text-text-muted">{isOwnerOperator ? 'unlimited' : 'tokens left'}</span>
                   </div>
                   <div className="bg-surface-container/40 border border-border rounded-xl p-3 flex flex-col gap-1">
                     <span className="text-[10px] text-text-muted font-bold">Revenue</span>
@@ -2576,43 +2571,45 @@ export default function OwnerDashboardPage() {
                 <div className="bg-surface-container/40 border border-border rounded-xl p-4 flex flex-col gap-3">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-text-muted font-bold">Monthly Usage</span>
-                    <span className={`text-xs font-mono font-bold flex items-center gap-1 ${isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-foreground'}`}>{tokensSoldThisMonth.toFixed(0)} / {limit} <TokenIcon className="w-3.5 h-3.5" /> ({usagePct.toFixed(0)}%)</span>
+                    <span className={`text-xs font-mono font-bold flex items-center gap-1 ${isOverLimit ? 'text-error' : isNearLimit ? 'text-warning' : 'text-foreground'}`}>{tokensSoldThisMonth.toFixed(0)} / {isOwnerOperator ? 'Unlimited' : limit} <TokenIcon className="w-3.5 h-3.5" /> {!isOwnerOperator && `(${usagePct.toFixed(0)}%)`}</span>
                   </div>
                   <div className="h-2.5 w-full bg-surface-container rounded-full overflow-hidden border border-border">
-                    <div style={{ width: `${usagePct}%` }} className={`h-full rounded-full transition-all duration-700 ${isOverLimit ? 'bg-error' : isNearLimit ? 'bg-warning' : 'bg-primary'}`} />
+                    <div style={{ width: `${isOwnerOperator ? 100 : usagePct}%` }} className={`h-full rounded-full transition-all duration-700 ${isOwnerOperator ? 'bg-blue-500/40' : (isOverLimit ? 'bg-error' : isNearLimit ? 'bg-warning' : 'bg-primary')}`} />
                   </div>
                   {isOverLimit && <p className="text-[10px] text-error font-bold">&#9888; Monthly limit exceeded. New token sales are blocked.</p>}
                   {isNearLimit && !isOverLimit && <p className="text-[10px] text-warning font-bold">&#9888; Approaching monthly limit. Consider raising the cap.</p>}
                 </div>
-                <div className="bg-surface-container/40 border border-border rounded-xl p-4 flex flex-col gap-3">
-                  <div>
-                    <h4 className="text-xs font-bold text-foreground flex items-center">
-                      Set Monthly Token Limit
-                      <InfoTag text="Sets the maximum number of tokens this operator can sell or issue in a calendar month." position="top" />
-                    </h4>
-                    <p className="text-[10px] text-text-muted mt-0.5">Restrict how many tokens this operator can sell per calendar month.</p>
-                  </div>
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1 flex flex-col gap-1.5">
-                      <label className="text-[9px] text-text-muted font-bold">Limit (tokens / month)</label>
-                      <div className="relative flex items-center">
-                        <input type="number" min="0" value={editingLimitValue} onChange={(e) => setEditingLimitValue(e.target.value)} className="minimal-input w-full px-3.5 py-2.5 text-sm font-mono text-white pr-10 focus:border-border-focus" />
-                        <span className="absolute right-3 flex items-center select-none pointer-events-none"><TokenIcon className="w-3.5 h-3.5 text-text-muted" /></span>
-                      </div>
+                {!isOwnerOperator && (
+                  <div className="bg-surface-container/40 border border-border rounded-xl p-4 flex flex-col gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground flex items-center">
+                        Set Monthly Token Limit
+                        <InfoTag text="Sets the maximum number of tokens this operator can sell or issue in a calendar month." position="top" />
+                      </h4>
+                      <p className="text-[10px] text-text-muted mt-0.5">Restrict how many tokens this operator can sell per calendar month.</p>
                     </div>
-                    <button
-                      onClick={async () => {
-                        const newLimit = parseInt(editingLimitValue) || 0;
-                        await updateStaffLimit(selectedStaffDetail.id, newLimit);
-                        setSelectedStaffDetail(prev => prev ? { ...prev, monthlyTokenLimit: newLimit } : null);
-                      }}
-                      className="minimal-btn-primary px-4 py-2.5 h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all whitespace-nowrap animate-slide-in"
-                    >
-                      Save Limit
-                    </button>
+                    <div className="flex gap-3 items-end">
+                      <div className="flex-1 flex flex-col gap-1.5">
+                        <label className="text-[9px] text-text-muted font-bold">Limit (tokens / month)</label>
+                        <div className="relative flex items-center">
+                          <input type="number" min="0" value={editingLimitValue} onChange={(e) => setEditingLimitValue(e.target.value)} className="minimal-input w-full px-3.5 py-2.5 text-sm font-mono text-white pr-10 focus:border-border-focus" />
+                          <span className="absolute right-3 flex items-center select-none pointer-events-none"><TokenIcon className="w-3.5 h-3.5 text-text-muted" /></span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const newLimit = parseInt(editingLimitValue) || 0;
+                          await updateStaffLimit(selectedStaffDetail.id, newLimit);
+                          setSelectedStaffDetail(prev => prev ? { ...prev, monthlyTokenLimit: newLimit } : null);
+                        }}
+                        className="minimal-btn-primary px-4 py-2.5 h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all whitespace-nowrap animate-slide-in"
+                      >
+                        Save Limit
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-text-muted font-semibold flex items-center gap-1">Current: <span className="font-mono font-bold text-foreground inline-flex items-center gap-1">{limit} <TokenIcon className="w-3 h-3" />/month</span> &middot; ≈ ₹{(limit * 30).toFixed(0)} cap</div>
                   </div>
-                  <div className="text-[10px] text-text-muted font-semibold flex items-center gap-1">Current: <span className="font-mono font-bold text-foreground inline-flex items-center gap-1">{limit} <TokenIcon className="w-3 h-3" />/month</span> &middot; ≈ ₹{(limit * 30).toFixed(0)} cap</div>
-                </div>
+                )}
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold text-foreground">Transaction History</h4>
@@ -2947,9 +2944,10 @@ export default function OwnerDashboardPage() {
               </div>
               <button 
                 onClick={() => setHistoryToken(null)}
-                className="text-[11px] text-text-muted hover:text-foreground font-bold transition-colors cursor-pointer"
+                className="w-7 h-7 rounded-full hover:bg-surface-container/80 text-text-muted hover:text-foreground flex items-center justify-center transition-all cursor-pointer"
+                title="Close"
               >
-                                <X size={14} weight="bold" /> Close
+                <X size={14} weight="bold" />
               </button>
             </div>
 
@@ -3002,26 +3000,45 @@ export default function OwnerDashboardPage() {
                       <tbody className="divide-y divide-border bg-surface-container/10">
                         {tokenTransactions
                           .filter(tx => tx.studentId === historyToken.id)
-                          .map((tx) => (
-                            <tr key={tx.id} className="hover:bg-surface-container/20 transition-colors">
-                              <td className="p-2.5 font-bold text-foreground font-mono">{tx.id}</td>
-                              <td className="p-2.5 text-text-muted font-medium">
-                                {new Date(tx.createdAt).toLocaleString([], {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </td>
-                              <td className={`p-2.5 font-mono font-bold ${tx.tokens < 0 ? 'text-error' : 'text-primary'}`}>
-                                {tx.tokens > 0 ? '+' : ''}{tx.tokens} tokens
-                              </td>
-                              <td className={`p-2.5 font-mono font-bold ${tx.amount < 0 ? 'text-error' : 'text-success'}`}>
-                                {tx.amount > 0 ? '+' : ''}₹{tx.amount.toFixed(2)}
-                              </td>
-                              <td className="p-2.5 text-foreground font-semibold">{tx.soldBy}</td>
-                            </tr>
-                          ))}
+                          .map((tx) => {
+                            const isDeduction = tx.type === 'deduction';
+                            const displayTokens = isDeduction ? -Math.abs(tx.tokens) : tx.tokens;
+                            const displayAmount = isDeduction ? -Math.abs(tx.amount) : tx.amount;
+                            const creditApplied = tx.creditApplied || 0;
+                            const creditReturned = tx.creditReturned || 0;
+
+                            return (
+                              <tr key={tx.id} className="hover:bg-surface-container/20 transition-colors">
+                                <td className="p-2.5 font-bold text-foreground font-mono">{tx.id}</td>
+                                <td className="p-2.5 text-text-muted font-medium">
+                                  {new Date(tx.createdAt).toLocaleString([], {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </td>
+                                <td className={`p-2.5 font-mono font-bold ${displayTokens < 0 ? 'text-error' : 'text-primary'}`}>
+                                  {displayTokens > 0 ? '+' : ''}{displayTokens} tokens
+                                  {tx.type === 'refund' && <span className="text-[9px] text-primary block">(Refunded)</span>}
+                                </td>
+                                <td className={`p-2.5 font-mono font-bold ${displayAmount < 0 ? 'text-error' : 'text-success'}`}>
+                                  {displayAmount > 0 ? '+' : ''}₹{displayAmount.toFixed(2)}
+                                  {creditApplied > 0 && (
+                                    <div className="text-[10px] text-error font-medium mt-0.5">
+                                      -₹{creditApplied.toFixed(2)} Store Credit Used
+                                    </div>
+                                  )}
+                                  {creditReturned > 0 && (
+                                    <div className="text-[10px] text-success font-medium mt-0.5">
+                                      +₹{creditReturned.toFixed(2)} Store Credit Added
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-2.5 text-foreground font-semibold">{tx.soldBy}</td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>
@@ -3040,6 +3057,185 @@ export default function OwnerDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* 6. Recharge Modal popup */}
+      {rechargeToken && (
+        <RechargeModal 
+          token={rechargeToken}
+          onClose={() => setRechargeToken(null)}
+          sellTokens={sellTokens}
+          tokenValue={settings?.tokenValueInRupees || 30}
+        />
+      )}
+      </div>
+    </div>
+  );
+}
+
+interface RechargeModalProps {
+  token: TokenAccount;
+  onClose: () => void;
+  sellTokens: (studentId: string, tokens: number, amount: number) => Promise<boolean>;
+  tokenValue: number;
+}
+
+function RechargeModal({ token, onClose, sellTokens, tokenValue }: RechargeModalProps) {
+  const [tokensInput, setTokensInput] = useState('');
+  const [amountInput, setAmountInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleTokensChange = (val: string) => {
+    const cleanVal = val.replace(/\D/g, '');
+    setTokensInput(cleanVal);
+    const parsed = parseInt(cleanVal, 10);
+    if (!isNaN(parsed) && parsed >= 0) {
+      setAmountInput((parsed * tokenValue).toString());
+    } else {
+      setAmountInput('');
+    }
+  };
+
+  const handleAmountChange = (val: string) => {
+    setAmountInput(val);
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed) && parsed >= 0) {
+      setTokensInput(Math.floor(parsed / tokenValue).toString());
+    } else {
+      setTokensInput('');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tokensInput || !amountInput) return;
+
+    const tkVal = parseInt(tokensInput, 10);
+    const amtVal = parseFloat(amountInput);
+
+    if (isNaN(tkVal) || tkVal <= 0 || isNaN(amtVal) || amtVal <= 0) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    const success = await sellTokens(token.id, tkVal, amtVal);
+    setIsSubmitting(false);
+    if (success) {
+      onClose();
+    }
+  };
+
+  const currentTokens = token.tokens || 0;
+  const addedTokens = parseInt(tokensInput, 10) || 0;
+  const newTokens = currentTokens + addedTokens;
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fade-in"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-surface border border-border w-full max-w-md rounded-xl overflow-hidden flex flex-col shadow-2xl animate-scale-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-surface-header/80 px-5 py-4 border-b border-border flex justify-between items-center shrink-0">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-text-muted">Load Balance</span>
+            <span className="text-sm font-bold text-foreground mt-0.5">Recharge Card: {token.name}</span>
+          </div>
+          <button 
+            onClick={onClose}
+            className="w-7 h-7 rounded-full hover:bg-surface-container/80 text-text-muted hover:text-foreground flex items-center justify-center transition-all cursor-pointer"
+            title="Close"
+          >
+            <X size={14} weight="bold" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 flex-1 flex flex-col gap-4 text-xs">
+          {/* Card Preview Component showing future state */}
+          <div className="bg-linear-to-br from-amber-605/10 to-amber-700/5 border border-amber-500/10 p-4 rounded-xl flex flex-col gap-3 relative overflow-hidden select-none bg-surface-container/20">
+            <div className="absolute right-4 top-4 w-12 h-8 bg-amber-500/10 rounded-md border border-amber-500/20 flex items-center justify-center font-mono font-bold text-amber-500">
+              Pass
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wider">Student Pass Card</span>
+              <span className="text-base font-bold text-foreground mt-1">{token.name}</span>
+              <span className="text-[10px] text-text-muted font-mono mt-0.5">#{token.cardNo}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-2 pt-3 border-t border-border/40">
+              <div className="flex flex-col">
+                <span className="text-[9px] text-text-muted font-bold">Current Balance</span>
+                <span className="text-sm font-bold text-foreground font-mono mt-1">{currentTokens} tokens</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] text-success font-bold">New Balance</span>
+                <span className="text-sm font-bold text-success font-mono mt-1">
+                  {newTokens} tokens {addedTokens > 0 && `(+${addedTokens})`}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tokens Input */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-text-muted font-bold">
+              Number of Tokens
+            </label>
+            <div className="relative flex items-center">
+              <input
+                type="number"
+                required
+                min="1"
+                placeholder="e.g. 10"
+                value={tokensInput}
+                onChange={(e) => handleTokensChange(e.target.value)}
+                className="minimal-input pl-3.5 pr-8 py-2.5 text-xs text-white placeholder-text-muted/50 font-mono w-full font-semibold"
+              />
+            </div>
+          </div>
+
+          {/* Amount Input */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-text-muted font-bold">
+              Rupees Paid (₹)
+            </label>
+            <div className="relative flex items-center">
+              <span className="absolute left-3 text-xs text-text-muted font-bold pointer-events-none">
+                ₹
+              </span>
+              <input
+                type="number"
+                required
+                min="1"
+                placeholder="e.g. 300"
+                value={amountInput}
+                onChange={(e) => handleAmountChange(e.target.value)}
+                className="minimal-input pl-6 pr-3.5 py-2.5 text-xs text-white placeholder-text-muted/50 font-mono w-full font-semibold"
+              />
+            </div>
+          </div>
+
+          <div className="text-[10px] text-text-muted leading-relaxed mt-1">
+            Exchange rate: <strong>1 Token = ₹{tokenValue.toFixed(2)}</strong>. This will record a recharge transaction ledger and apply to the operator's monthly limits.
+          </div>
+
+          <div className="flex justify-end gap-2.5 mt-4 pt-3 border-t border-border/60">
+            <button
+              type="button"
+              onClick={onClose}
+              className="minimal-btn-secondary px-4 py-2.5 h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || !tokensInput || !amountInput}
+              className="minimal-btn-primary px-5 py-2.5 h-10 min-h-0 text-xs font-bold rounded-lg cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Processing...' : 'Recharge Card'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -1,20 +1,49 @@
 import { NextResponse } from 'next/server';
+import { getSession } from '../../../services/apiHelper';
+
+// In-memory rate limiting map
+const rateLimitMap = new Map<string, number[]>();
+
+function checkRateLimit(userId: string, limit = 5, windowMs = 60000): boolean {
+  const now = Date.now();
+  const timestamps = rateLimitMap.get(userId) || [];
+  
+  // Filter timestamps to keep only those within the current window
+  const activeTimestamps = timestamps.filter(t => now - t < windowMs);
+  
+  if (activeTimestamps.length >= limit) {
+    return false;
+  }
+  
+  activeTimestamps.push(now);
+  rateLimitMap.set(userId, activeTimestamps);
+  return true;
+}
 
 export async function POST(req: Request) {
   try {
-    const headerApiKey = req.headers.get('x-grok-api-key');
-    
-    // Parse client header or server-side env variable keys
-    let keys: string[] = [];
+    // 1. Session verification
+    const session = await getSession(req);
+    const hasFirebase = !!(
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    );
 
-    if (headerApiKey && headerApiKey.trim() !== '') {
-      keys = headerApiKey.split(',').map(k => k.trim()).filter(Boolean);
+    if (hasFirebase) {
+      if (!session || session.status !== 'active') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      // 2. Rate limiting (max 5 requests per minute per user)
+      const rateLimitOk = checkRateLimit(session.uid);
+      if (!rateLimitOk) {
+        return NextResponse.json({ error: 'Too many requests. Please try again in a minute.' }, { status: 429 });
+      }
     }
 
-    if (keys.length === 0) {
-      const envKeys = process.env.GROQ_API_KEYS || process.env.NEXT_PUBLIC_GROK_API_KEY || '';
-      keys = envKeys.split(',').map(k => k.replace(/["']/g, '').trim()).filter(Boolean);
-    }
+    // 3. Parse only server-side environment variable keys (no client keys or public keys)
+    const envKeys = process.env.GROQ_API_KEYS || '';
+    const keys = envKeys.split(',').map(k => k.replace(/["']/g, '').trim()).filter(Boolean);
 
     const body = await req.json();
     const { action, data } = body;

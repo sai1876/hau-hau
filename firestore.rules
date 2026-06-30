@@ -1,29 +1,17 @@
 rules_version = '2';
 
 // =============================================================================
-// Hau-Hau POS — Firestore Security Rules
+// Hau-Hau POS — Firestore Security Rules (Production Hardened)
 // =============================================================================
-// These rules are the PRIMARY security layer between clients and Firestore.
-// Because all role checks in the app are currently client-side, these rules
-// provide the server-enforced safety net.
-//
-// Current architecture:
-//   - Firebase Auth UIDs map to documents in the `staff` collection
-//   - The `role` field in that document determines access level
-//
-// ⚠ IMPORTANT LIMITATION:
-//   Role checks below read the caller's staff document to determine their role.
-//   This pattern is correct but has a small risk: if the `role` field in Firestore
-//   is tampered with, a user could elevate their own permissions.
-//   The recommended production fix is to use Firebase Custom Claims via the
-//   Firebase Admin SDK (see SECURITY.md for the recommended path).
+// These rules enforce cryptographic claims-based security and restrict
+// sensitive database operations to the Server Admin SDK.
 // =============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // -------------------------------------------------------------------------
-    // Helper Functions
+    // Helper Functions (Claims-Only Enforced)
     // -------------------------------------------------------------------------
 
     // Returns true if the request comes from an authenticated Firebase user.
@@ -31,153 +19,110 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Fetches the caller's staff profile document.
-    function callerProfile() {
-      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data;
-    }
-
-    // Returns true if the authenticated user's email matches the owner email.
-    // This is a lightweight check that doesn't require a Firestore document lookup.
-    function isOwnerByEmail() {
-      return isAuthenticated() &&
-             (request.auth.token.email == 'cherukuridakshithsai@gmail.com' ||
-              request.auth.token.email == 'owner-demo@hauhau.com' ||
-              request.auth.token.email == 'tharun@gmail.com' ||
-              request.auth.token.email == 'tharun@gamil.com');
-    }
-
-    // Returns true if the authenticated user has the 'owner' role.
-    // Checks owner email first (no Firestore read needed), then custom claims,
-    // then falls back to the staff profile document.
+    // Returns true if the authenticated user has the 'owner' custom claim.
     function isOwner() {
-      return isOwnerByEmail() ||
-             (isAuthenticated() &&
-              (request.auth.token.role == 'owner' ||
-               (exists(/databases/$(database)/documents/staff/$(request.auth.uid)) &&
-                callerProfile().role == 'owner')));
+      return isAuthenticated() && (request.auth.token.role == 'owner' || request.auth.token.role == 'admin');
     }
 
     // Returns true if the authenticated user is an active staff member or owner.
-    // Owners always pass this check. Staff members must have status 'active'.
     function isActiveStaff() {
       return isOwner() ||
              (isAuthenticated() &&
-              exists(/databases/$(database)/documents/staff/$(request.auth.uid)) &&
-              (request.auth.token.status == 'active' || callerProfile().status == 'active') &&
-              (request.auth.token.role == 'staff' || request.auth.token.role == 'owner' ||
-               callerProfile().role == 'staff' || callerProfile().role == 'owner'));
+              request.auth.token.role == 'staff' &&
+              request.auth.token.status == 'active');
+    }
+
+    // Returns true if the authenticated user is a demo user.
+    // Demo accounts are read-only and cannot mutate production Firestore state.
+    function isDemoUser() {
+      return isAuthenticated() && (
+        request.auth.token.email.matches('.*demo.*') ||
+        request.auth.token.isDemo == true
+      );
     }
 
     // -------------------------------------------------------------------------
     // `menu` collection
-    // Purpose: Menu items visible on the POS.
     // -------------------------------------------------------------------------
     match /menu/{itemId} {
-      // Any active authenticated user can read the menu.
+      // Active staff/owners can read the menu.
       allow read: if isActiveStaff();
 
-      // Only the owner can write or modify menu items, and price must be positive.
-      allow create, update: if isOwner() && request.resource.data.price > 0;
-      allow delete: if isOwner();
+      // Only non-demo owners can modify menu items, and price must be positive.
+      allow create, update: if isOwner() && !isDemoUser() && request.resource.data.price > 0;
+      allow delete: if isOwner() && !isDemoUser();
     }
 
     // -------------------------------------------------------------------------
     // `orders` collection
-    // Purpose: All orders placed by staff.
     // -------------------------------------------------------------------------
     match /orders/{orderId} {
-      // Any active staff/owner can read orders.
+      // Active staff/owners can read orders.
       allow read: if isActiveStaff();
 
-      // Active staff can create new orders.
-      allow create: if isActiveStaff() && request.resource.data.total >= 0;
-
-      // Only the owner can update orders.
-      // Enforce validation: a cancelled order cannot be completed again.
-      allow update: if isOwner() &&
-                    (resource.data.orderStatus != 'cancelled' || request.resource.data.orderStatus == 'cancelled');
-
-      // Orders should never be deleted.
-      allow delete: if false;
+      // Direct client writes (creates, updates, deletes) are denied.
+      // All order creations and state modifications must flow through secure API routes.
+      allow write: if false;
     }
 
     // -------------------------------------------------------------------------
     // `staff` collection
-    // Purpose: Staff profiles and account settings.
     // -------------------------------------------------------------------------
     match /staff/{staffId} {
-      // Any active staff member can read profiles.
-      allow read: if isActiveStaff();
+      // Any active staff member can read profiles. A user can read their own profile.
+      allow read: if isActiveStaff() || (isAuthenticated() && request.auth.uid == staffId);
 
-      // Only the owner can create new staff profiles.
-      allow create: if isOwner();
+      // Staff creation and deletion are handled via secure API routes using Admin SDK.
+      allow create, delete: if false;
 
-      // Owner can update any field. A staff member can only update their own
-      // name and contact.
-      allow update: if isOwner() ||
-                    (isAuthenticated() &&
-                     request.auth.uid == staffId &&
-                     request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['name', 'emailOrPhone', 'password']));
-
-      // Only the owner can delete staff accounts.
-      allow delete: if isOwner();
+      // Staff members can only update their own name/email/phone. Owners can update via API.
+      allow update: if isAuthenticated() &&
+                    request.auth.uid == staffId &&
+                    !isDemoUser() &&
+                    request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['name', 'emailOrPhone']);
     }
 
     // -------------------------------------------------------------------------
     // `tokens` collection
-    // Purpose: Student/customer stored-value token accounts.
     // -------------------------------------------------------------------------
     match /tokens/{tokenId} {
-      // Any active staff/owner can read token accounts.
+      // Active staff/owners can read token accounts.
       allow read: if isActiveStaff();
 
-      // Active staff can issue cards, but balance cannot be negative.
-      allow create: if isActiveStaff() && 
-                    request.resource.data.tokens >= 0 &&
-                    (!('balanceRupees' in request.resource.data) || request.resource.data.balanceRupees >= 0);
-
-      // Owner can update any field. Staff can only update the tokens balance field,
-      // and balance can never be negative.
-      allow update: if isOwner() && request.resource.data.tokens >= 0 ||
-                    (isActiveStaff() &&
-                     (request.auth.token.role == 'staff' || callerProfile().role == 'staff') &&
-                     request.resource.data.tokens >= 0 &&
-                     (!('balanceRupees' in request.resource.data) || request.resource.data.balanceRupees >= 0) &&
-                     request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['tokens', 'balanceRupees', 'updatedAt']));
-
-      // Only owner can delete token accounts.
-      allow delete: if isOwner();
+      // Direct client writes allowed for owner/admin (for updating name/cardNo)
+      allow write: if isOwner() && !isDemoUser();
     }
 
     // -------------------------------------------------------------------------
-    // `token_transactions` collection
-    // Purpose: Immutable ledger of all token recharges, deductions, and refunds.
+    // `token_transactions` collection (Immutable Ledger)
     // -------------------------------------------------------------------------
     match /token_transactions/{txId} {
+      // Active staff/owners can read transaction logs.
       allow read: if isActiveStaff();
-      allow create: if isActiveStaff();
-      allow update, delete: if false;
+
+      // Direct client writes are strictly denied.
+      allow write: if false;
     }
 
     // -------------------------------------------------------------------------
     // `settings` collection
-    // Purpose: Configuration options for Hau-Hau POS.
     // -------------------------------------------------------------------------
     match /settings/{settingsId} {
       allow read: if isActiveStaff();
-      allow create, update: if isOwner();
+      allow create, update: if isOwner() && !isDemoUser();
       allow delete: if false;
     }
 
     // -------------------------------------------------------------------------
-    // `audit_logs` collection
-    // Purpose: Immutable ledger of operational modifications.
+    // `audit_logs` collection (Immutable Operational Logs)
     // -------------------------------------------------------------------------
     match /audit_logs/{logId} {
       allow read: if isOwner();
-      allow create: if isActiveStaff();
+      
+      // Allow client creation for LocalStorage fallback mode only.
+      // In Firebase mode, audit logs are set via Admin SDK.
+      allow create: if isActiveStaff() && !isDemoUser();
       allow update, delete: if false;
     }
 

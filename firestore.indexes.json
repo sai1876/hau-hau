@@ -1,0 +1,14 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "token_transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "soldBy", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

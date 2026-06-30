@@ -28,7 +28,17 @@ let firebaseBlocked = false;
 // Check if Firebase is actually configured with environment variables
 export const isFirebaseConfigured = () => {
   if (process.env.NODE_ENV === 'production') {
-    return true; // Strictly assume Firebase is configured in production
+    // Validate that required Firebase configuration is present
+    const isConfigured = !!(
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== 'undefined' &&
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== 'undefined'
+    );
+    if (!isConfigured) {
+      throw new Error("Missing required Firebase environment variables in production. Failing fast.");
+    }
+    return true;
   }
   if (firebaseBlocked) return false;
   return !!(
@@ -42,7 +52,7 @@ export const isFirebaseConfigured = () => {
 export const markFirebaseBlocked = () => {
   if (process.env.NODE_ENV === 'production') {
     console.error("Firebase/Firestore was blocked or failed to load. LocalStorage fallback is disabled in production.");
-    return;
+    throw new Error("Firestore connection failed in production.");
   }
   if (!firebaseBlocked) {
     console.warn("Firebase/Firestore was blocked or failed to load. Falling back to LocalStorage mode.");
@@ -425,11 +435,8 @@ export const db = {
       const firestoreUnsub = onSnapshot(menuCol, (snapshot) => {
         if (isUnsubscribed) return;
         if (snapshot.empty) {
-          // Auto-seed Firestore if empty
-          DEFAULT_MENU.forEach((item) => {
-            setDoc(doc(firestore, 'menu', item.id), item).catch(() => {});
-          });
-          callback(mergeMenuWithDefaults(DEFAULT_MENU));
+          console.warn("Menu collection is empty. Please run the seeding script to populate the database.");
+          callback([]);
         } else {
           const menuItems: MenuItem[] = [];
           snapshot.forEach((doc) => {
@@ -464,7 +471,7 @@ export const db = {
         if (isUnsubscribed) return;
         const ordersList: Order[] = [];
         snapshot.forEach((doc) => {
-          ordersList.push(doc.data() as Order);
+          ordersList.push({ id: doc.id, ...doc.data() } as Order);
         });
         callback(ordersList);
       }, (error) => {
@@ -492,16 +499,8 @@ export const db = {
       const firestoreUnsub = onSnapshot(staffCol, (snapshot) => {
         if (isUnsubscribed) return;
         if (snapshot.empty) {
-          if (process.env.NODE_ENV === 'production') {
-            console.warn("Staff collection is empty. Please run the seeding script to create the owner profile.");
-            callback([]);
-            return;
-          }
-          // Auto-seed
-          DEFAULT_STAFF.forEach((member) => {
-            setDoc(doc(firestore, 'staff', member.id), member).catch(() => {});
-          });
-          callback(DEFAULT_STAFF);
+          console.warn("Staff collection is empty. Please run the seeding script to populate the database.");
+          callback([]);
         } else {
           const staffList: StaffAccount[] = [];
           snapshot.forEach((doc) => {
@@ -1318,7 +1317,9 @@ export const db = {
           orderId,
           createdAt: new Date().toISOString(),
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
-          isDemo
+          isDemo,
+          creditApplied,
+          creditReturned: (tokensToDeduct * rate) - amountPayable
         };
         transaction.set(txRef, txRecord);
         
@@ -1448,6 +1449,10 @@ export const db = {
         });
         
         const isDemo = isCurrentSessionDemo();
+        const netCreditChange = (tokensToRefund * rate) - orderTotal;
+        const creditApplied = netCreditChange > 0 ? netCreditChange : 0;
+        const creditReturned = netCreditChange < 0 ? -netCreditChange : 0;
+
         const txRecord: TokenTransaction = {
           id: txRef.id,
           type: 'refund',
@@ -1460,7 +1465,9 @@ export const db = {
           orderId,
           createdAt: new Date().toISOString(),
           outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
-          isDemo
+          isDemo,
+          creditApplied,
+          creditReturned
         };
         transaction.set(txRef, txRecord);
         
@@ -1502,6 +1509,10 @@ export const db = {
       localStorage.setItem(TOKENS_KEY, JSON.stringify(list));
       
       const isDemo = isCurrentSessionDemo();
+      const netCreditChange = (tokensToRefund * rate) - orderTotal;
+      const creditApplied = netCreditChange > 0 ? netCreditChange : 0;
+      const creditReturned = netCreditChange < 0 ? -netCreditChange : 0;
+
       const txRecord: TokenTransaction = {
         id: 'tx_' + Math.random().toString(36).substr(2, 9),
         type: 'refund',
@@ -1514,7 +1525,9 @@ export const db = {
         orderId,
         createdAt: new Date().toISOString(),
         outletId: currentCard.outletId || DEFAULT_OUTLET_ID,
-        isDemo
+        isDemo,
+        creditApplied,
+        creditReturned
       };
       const txs = localStorage.getItem(TRANSACTIONS_KEY);
       const txsList: TokenTransaction[] = txs ? JSON.parse(txs) : [];

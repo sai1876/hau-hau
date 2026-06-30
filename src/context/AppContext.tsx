@@ -25,6 +25,7 @@ interface AppContextType {
   tokens: TokenAccount[];
   tokenTransactions: TokenTransaction[];
   currentUser: { id?: string; uid?: string; name: string; role: 'staff' | 'owner'; username: string } | null;
+  authLoading: boolean;
   activeTable: string | null;
   tableCarts: Record<string, CartItem[]>; // tableNumber -> CartItem[]
   toasts: Array<{ id: string; message: string; type: 'success' | 'error' | 'warning' | 'info' }>;
@@ -102,6 +103,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [currentUser, setCurrentUser] = useState<AppContextType['currentUser']>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [activeTable, setActiveTable] = useState<string | null>(null);
   const [tableCarts, setTableCarts] = useState<Record<string, CartItem[]>>({});
   const [toasts, setToasts] = useState<AppContextType['toasts']>([]);
@@ -167,129 +169,114 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Initialize data subscriptions on mount
   // 1. Listen to Auth State
   useEffect(() => {
+    const savedUser = localStorage.getItem('hau_hau_session');
+    if (savedUser) {
+      setCurrentUser(JSON.parse(savedUser));
+    }
+    const savedCarts = localStorage.getItem('hau_hau_table_carts');
+    if (savedCarts) {
+      setTableCarts(JSON.parse(savedCarts));
+    }
+
     if (!usingFirebase) {
-      const savedUser = localStorage.getItem('hau_hau_session');
-      if (savedUser) {
-        setCurrentUser(JSON.parse(savedUser));
-      }
-      const savedCarts = localStorage.getItem('hau_hau_table_carts');
-      if (savedCarts) {
-        setTableCarts(JSON.parse(savedCarts));
-      }
+      setAuthLoading(false);
       return;
     }
 
     const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const email = firebaseUser.email;
-        const isOwnerEmail = email === 'cherukuridakshithsai@gmail.com' ||
-                             email === 'owner-demo@hauhau.com' ||
-                             email === 'tharun@gmail.com' ||
-                             email === 'tharun@gamil.com';
         try {
-          const docRef = doc(firestore, 'staff', firebaseUser.uid);
-          let docSnap;
-          try {
-            docSnap = await getDoc(docRef);
-          } catch (readErr) {
-            // If it's an owner email and read failed (likely due to missing document causing rule violation),
-            // we will create the profile document. Otherwise, we rethrow the read error.
-            if (isOwnerEmail) {
-              console.log("Owner profile missing or unreadable. Self-healing...");
-              const ownerProfile = {
-                id: firebaseUser.uid,
-                name: firebaseUser.displayName || email?.split('@')[0] || 'Owner',
-                emailOrPhone: email || '',
-                username: email?.split('@')[0] || 'owner',
-                role: 'owner',
-                status: 'active',
-                outletId: 'main_outlet',
-                isDemo: email?.includes('demo') || false
-              };
-              await setDoc(docRef, ownerProfile);
-              docSnap = await getDoc(docRef);
-            } else {
-              throw readErr;
-            }
-          }
+          const idTokenResult = await firebaseUser.getIdTokenResult();
+          const rawRole = idTokenResult.claims.role as string;
+          const role = (rawRole === 'admin' ? 'owner' : rawRole) as 'owner' | 'staff';
+          const status = idTokenResult.claims.status as 'active' | 'inactive';
 
-          if (docSnap && docSnap.exists()) {
-            const profile = docSnap.data() as StaffAccount;
-            const role = (profile.role || (profile.username === 'owner' ? 'owner' : 'staff')) as 'staff' | 'owner';
-            
-            if (profile.status === 'inactive') {
+          if (role) {
+            // Claims are already set — role and status are known
+            if (status === 'inactive') {
               addToast('This account is disabled.', 'error');
               await signOut(auth);
               setCurrentUser(null);
+              localStorage.removeItem('hau_hau_session');
+              setAuthLoading(false);
               return;
             }
 
-            setCurrentUser({
-              id: docSnap.id,
-              uid: docSnap.id,
-              name: profile.name,
-              role,
-              username: profile.username
-            });
-
-            // Redirect based on role on login screen
-            if (window.location.pathname === '/login') {
-              if (role === 'owner') {
-                router.push('/owner');
-              } else {
-                router.push('/staff');
+            // Try to get the profile doc for display name / username
+            let name = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User';
+            let username = firebaseUser.email?.split('@')[0] || 'user';
+            try {
+              const docRef = doc(firestore, 'staff', firebaseUser.uid);
+              const docSnap = await getDoc(docRef);
+              if (docSnap.exists()) {
+                const profile = docSnap.data() as StaffAccount;
+                name = profile.name;
+                username = profile.username;
               }
+            } catch {
+              // Firestore read failed (e.g. permission-denied before claims propagate)
             }
-          } else {
-            // Profile snap exists but is empty, and it is an owner email
-            if (isOwnerEmail) {
-              const ownerProfile = {
-                id: firebaseUser.uid,
-                name: firebaseUser.displayName || email?.split('@')[0] || 'Owner',
-                emailOrPhone: email || '',
-                username: email?.split('@')[0] || 'owner',
-                role: 'owner',
-                status: 'active',
-                outletId: 'main_outlet',
-                isDemo: email?.includes('demo') || false
-              };
-              await setDoc(docRef, ownerProfile);
-              
-              setCurrentUser({
-                id: firebaseUser.uid,
-                uid: firebaseUser.uid,
-                name: ownerProfile.name,
-                role: 'owner',
-                username: ownerProfile.username
-              });
 
-              if (window.location.pathname === '/login') {
-                router.push('/owner');
+            const loggedUser = {
+              id: firebaseUser.uid,
+              uid: firebaseUser.uid,
+              name,
+              role,
+              username
+            };
+            setCurrentUser(loggedUser);
+            localStorage.setItem('hau_hau_session', JSON.stringify(loggedUser));
+          } else {
+            // No claims yet — try reading the staff doc directly (first-time login fallback)
+            try {
+              const docRef = doc(firestore, 'staff', firebaseUser.uid);
+              const docSnap = await getDoc(docRef);
+              if (docSnap.exists()) {
+                const profile = docSnap.data() as StaffAccount;
+                const rawDocRole = profile.role || 'staff';
+                const docRole = ((rawDocRole as string) === 'admin' ? 'owner' : rawDocRole) as 'owner' | 'staff';
+                if (profile.status === 'inactive') {
+                  addToast('This account is disabled.', 'error');
+                  await signOut(auth);
+                  setCurrentUser(null);
+                  localStorage.removeItem('hau_hau_session');
+                  setAuthLoading(false);
+                  return;
+                }
+                
+                const loggedUser = {
+                  id: firebaseUser.uid,
+                  uid: firebaseUser.uid,
+                  name: profile.name,
+                  role: docRole,
+                  username: profile.username
+                };
+                setCurrentUser(loggedUser);
+                localStorage.setItem('hau_hau_session', JSON.stringify(loggedUser));
               }
-            } else {
-              addToast('Access denied: Staff profile not found in database.', 'error');
-              await signOut(auth);
-              setCurrentUser(null);
+            } catch {
+              // Firestore read failed — let login() handle the redirect/setup.
             }
           }
-        } catch (e) {
-          console.warn('Error fetching auth user profile:', e);
-          addToast('Access denied: Failed to load profile or permissions missing.', 'error');
-          await signOut(auth);
-          setCurrentUser(null);
+        } catch (e: any) {
+          console.warn('Error in onAuthStateChanged:', e);
+          if (e?.code?.startsWith('auth/')) {
+            await signOut(auth);
+            setCurrentUser(null);
+            localStorage.removeItem('hau_hau_session');
+          }
         }
       } else {
         setCurrentUser(null);
+        localStorage.removeItem('hau_hau_session');
       }
+      setAuthLoading(false);
     }, (error) => {
       console.warn("Auth state changed error/blocked. Triggering LocalStorage fallback:", error);
       db.markFirebaseBlocked();
+      setAuthLoading(false);
     });
 
-    const savedCarts = localStorage.getItem('hau_hau_table_carts');
-    if (savedCarts) {
-      setTableCarts(JSON.parse(savedCarts));
-    }
 
     return () => {
       unsubAuth();
@@ -313,7 +300,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubOrders = db.subscribeOrders((updatedOrders) => {
       const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
       const filtered = isDemoUser 
-        ? updatedOrders 
+        ? updatedOrders.filter(o => o.isDemo) 
         : updatedOrders.filter(o => !o.isDemo);
       setOrders(filtered);
     });
@@ -322,7 +309,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubStaff = db.subscribeStaff((updatedStaff) => {
       const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
       const filtered = isDemoUser 
-        ? updatedStaff 
+        ? updatedStaff.filter(s => s.isDemo || s.username === 'owner-demo' || s.username === 'staff-demo') 
         : updatedStaff.filter(s => !s.isDemo && s.username !== 'owner-demo' && s.username !== 'staff-demo');
       setStaffList(filtered);
     });
@@ -331,7 +318,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubTokens = db.subscribeTokens((updatedTokens) => {
       const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
       const filtered = isDemoUser 
-        ? updatedTokens 
+        ? updatedTokens.filter(t => t.isDemo) 
         : updatedTokens.filter(t => !t.isDemo);
       setTokens(filtered);
     });
@@ -340,7 +327,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubTransactions = db.subscribeTokenTransactions((updatedTxs) => {
       const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
       const filtered = isDemoUser 
-        ? updatedTxs 
+        ? updatedTxs.filter(tx => tx.isDemo) 
         : updatedTxs.filter(tx => !tx.isDemo);
       setTokenTransactions(filtered);
     });
@@ -356,7 +343,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubAuditLogs = db.subscribeAuditLogs((updatedLogs) => {
         const isDemoUser = currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo';
         const filtered = isDemoUser 
-          ? updatedLogs 
+          ? updatedLogs.filter(log => log.isDemo) 
           : updatedLogs.filter(log => !log.isDemo);
         setAuditLogs(filtered);
       });
@@ -384,50 +371,85 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password?: string, bypassAuth = false): Promise<boolean> => {
     let email = username;
 
-    // Map usernames to emails for Firebase Auth
-    if (username === 'owner' || username === 'admin') {
-      email = process.env.NEXT_PUBLIC_PRODUCTION_OWNER_EMAIL || 'cherukuridakshithsai@gmail.com';
-    } else if (username === 'owner-demo') {
-      email = 'owner-demo@hauhau.com';
-    } else if (username === 'staff') {
-      email = 'staff@hauhau.com';
-    } else if (username === 'staff-demo') {
-      email = 'staff-demo@hauhau.com';
-    } else {
-      // Find staff by username to get their email
-      const profile = staffList.find(s => s.username.toLowerCase() === username.toLowerCase());
-      if (profile) {
-        email = profile.emailOrPhone;
-      }
-    }
-
     if (db.isFirebaseConfigured() && !bypassAuth) {
       try {
         if (!password) {
           addToast('Password is required.', 'error');
           return false;
         }
-        const credential = await signInWithEmailAndPassword(auth, email, password);
-        addToast('Verifying credentials...', 'info');
 
-        // Self-healing password migration in Firestore
-        try {
-          const userDocRef = doc(firestore, 'staff', credential.user.uid);
-          const docSnap = await getDoc(userDocRef);
-          if (docSnap.exists()) {
-            const profile = docSnap.data() as StaffAccount;
-            if (profile.password && !/^[a-f0-9]{64}$/i.test(profile.password)) {
-              const hashedPasswordValue = await hashPassword(password);
-              await updateDoc(userDocRef, { password: hashedPasswordValue });
-              console.log(`Auto-migrated plaintext password to SHA-256 hash for UID: ${credential.user.uid}`);
-            }
+        // Dynamically resolve username to registered email
+        const resolveRes = await fetch(`/api/auth/resolve-email?username=${encodeURIComponent(username.trim())}`);
+        if (resolveRes.ok) {
+          const data = await resolveRes.json();
+          if (data.email) {
+            email = data.email;
           }
-        } catch (migrationErr) {
-          console.warn("Self-healing password migration failed:", migrationErr);
+        }
+
+        addToast('Signing in...', 'info');
+        const credential = await signInWithEmailAndPassword(auth, email, password);
+
+        // Create secure session on server
+        let idToken = await credential.user.getIdToken();
+        let res = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to create secure session.');
+        }
+
+        let sessionData = await res.json();
+
+        // If claims were freshly provisioned, refresh the token and retry once
+        if (sessionData.claimsUpdated) {
+          idToken = await credential.user.getIdToken(true);
+          res = await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken })
+          });
+          
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || 'Failed to finalize secure session.');
+          }
+          sessionData = await res.json();
+        }
+
+        // Determine the canonical role
+        const rawRole = sessionData.role;
+        const resolvedRole = typeof rawRole === 'string' ? rawRole.toLowerCase() : '';
+        const canonicalRole: 'owner' | 'staff' =
+          resolvedRole === 'admin' || resolvedRole === 'owner' ? 'owner' : 'staff';
+
+        // Set currentUser NOW so the destination page sees a valid user immediately.
+        // This prevents the owner/staff page from bouncing back to /login
+        // due to a race condition where currentUser is still null when the page loads.
+        const fbUser = credential.user;
+        const loggedInUser = {
+          id: fbUser.uid,
+          uid: fbUser.uid,
+          name: fbUser.displayName || username || fbUser.email?.split('@')[0] || 'User',
+          role: canonicalRole,
+          username: username
+        };
+        setCurrentUser(loggedInUser);
+        localStorage.setItem('hau_hau_session', JSON.stringify(loggedInUser));
+
+        // Now navigate — currentUser is already set, page will render correctly
+        if (canonicalRole === 'staff') {
+          router.push('/staff');
+        } else {
+          router.push('/owner');
         }
 
         return true;
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Auth Error:', err);
         let errMsg = 'Invalid username or password.';
         const firebaseError = err as { code?: string };
@@ -435,23 +457,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           errMsg = 'Invalid email address format.';
         } else if (firebaseError.code === 'auth/user-disabled') {
           errMsg = 'This account has been disabled.';
+        } else if (firebaseError.code === 'auth/invalid-credential') {
+          errMsg = 'Invalid username or password.';
+        } else if (err.message && !firebaseError.code) {
+          errMsg = err.message;
         }
         addToast(errMsg, 'error');
         return false;
       }
     } else {
       // LocalStorage fallback mode
+      if (process.env.NEXT_PUBLIC_ENABLE_LOCAL_AUTH !== 'true') {
+        addToast('Local authentication fallback is disabled in this environment.', 'error');
+        return false;
+      }
+
+      const localOwnerPassword = process.env.NEXT_PUBLIC_LOCAL_OWNER_PASSWORD;
+      const localStaffPassword = process.env.NEXT_PUBLIC_LOCAL_STAFF_PASSWORD;
+
+      if (!localOwnerPassword || !localStaffPassword) {
+        addToast('Local credentials not configured. Please define NEXT_PUBLIC_LOCAL_OWNER_PASSWORD and NEXT_PUBLIC_LOCAL_STAFF_PASSWORD in .env.local', 'error');
+        return false;
+      }
+
       const inputHash = password ? await hashPassword(password) : '';
-      
-      const isOwnerBypass = bypassAuth || 
-        password === 'owner' || 
-        password === 'owner123' ||
-        password === 'demo123' ||
-        password === 'Sai@011325' ||
-        inputHash === '4c1029697ee358715d3a14a2add817c4b01651440de808371f78165ac90dc581' || // 'owner'
-        inputHash === '43a0d17178a9d26c9e0fe9a74b0b45e38d32f27aed887a008a54bf6e033bf7b9' || // 'owner123'
-        inputHash === '01e084a4d6bc824806aa4c473a367f0d4ad73f5baf452ab2c4c6845265900440' || // 'Sai@011325'
-        inputHash === 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791';  // 'demo123'
+      const localOwnerHash = await hashPassword(localOwnerPassword);
+      const localStaffHash = await hashPassword(localStaffPassword);
+
+      const isOwnerBypass = bypassAuth || password === localOwnerPassword || inputHash === localOwnerHash;
 
       if ((username === 'owner' || username === 'admin' || username === 'owner-demo') && isOwnerBypass) {
         const user = { 
@@ -468,31 +501,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
 
+      const isStaffBypass = bypassAuth || password === localStaffPassword || inputHash === localStaffHash;
       const foundStaff = staffList.find(s => 
         s.username === username && 
         (
-          bypassAuth || 
+          isStaffBypass || 
           s.password === inputHash || 
-          s.password === password || 
-          s.password === '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6' || // 'staff123'
-          s.password === 'staff123' ||
-          s.password === 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791' // 'demo123'
+          s.password === password
         )
       );
       if (foundStaff) {
         if (foundStaff.status === 'inactive') {
           addToast('This account is currently disabled. Please contact the owner.', 'error');
           return false;
-        }
-
-        // Self-healing password migration in LocalStorage
-        if (password && !bypassAuth && !/^[a-f0-9]{64}$/i.test(foundStaff.password)) {
-          try {
-            await db.updateStaffAccount(foundStaff.id, { password: inputHash });
-            console.log(`Auto-migrated plaintext password to SHA-256 hash for local user: ${foundStaff.username}`);
-          } catch (migrationErr) {
-            console.warn("Self-healing local password migration failed:", migrationErr);
-          }
         }
 
         const user = { 
@@ -517,6 +538,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     if (db.isFirebaseConfigured()) {
       await signOut(auth);
+      await fetch('/api/auth/session', { method: 'DELETE' });
     }
     setCurrentUser(null);
     localStorage.removeItem('hau_hau_session');
@@ -758,74 +780,111 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const subtotal = currentCart.reduce((acc, item) => acc + item.price * item.quantity, 0);
       const orderTotal = settings?.taxEnabled ? subtotal * 1.05 : subtotal;
-      let extraOrderFields: Partial<Order> = {};
 
-      if (paymentMode === 'tokens') {
-        if (!tokenCardNo) {
-          addToast('Token card number is required for token payment.', 'error');
-          setIsSubmittingOrder(false);
-          return false;
-        }
+      if (db.isFirebaseConfigured()) {
+        const studentCard = paymentMode === 'tokens' && tokenCardNo 
+          ? tokens.find(t => t.cardNo === tokenCardNo) 
+          : undefined;
 
-        const studentCard = tokens.find(t => t.cardNo === tokenCardNo);
-        if (!studentCard) {
+        if (paymentMode === 'tokens' && !studentCard) {
           addToast('Student card not found with that card number.', 'error');
           setIsSubmittingOrder(false);
           return false;
         }
 
-        const balanceRupees = studentCard.balanceRupees || 0;
-        const amountPayable = Math.max(0, orderTotal - balanceRupees);
-        const tokensRequired = Math.ceil(amountPayable / settings.tokenValueInRupees);
+        const res = await fetch('/api/orders/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderData: {
+              tableNumber: activeTable,
+              items: currentCart,
+              total: orderTotal,
+              paymentMode,
+              staffName: currentUser?.name || 'unknown',
+              outletId: settings.outletId || 'main_outlet',
+              tokenCardNo: paymentMode === 'tokens' ? tokenCardNo : undefined,
+              tokenCardId: paymentMode === 'tokens' ? studentCard?.id : undefined,
+            }
+          })
+        });
 
-        if (studentCard.tokens < tokensRequired) {
-          addToast(`Insufficient tokens! Card has ${studentCard.tokens}, required: ${tokensRequired}`, 'error');
-          setIsSubmittingOrder(false);
-          return false;
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to place order.');
+        }
+      } else {
+        // LocalStorage fallback path
+        let extraOrderFields: Partial<Order> = {};
+
+        if (paymentMode === 'tokens') {
+          if (!tokenCardNo) {
+            addToast('Token card number is required for token payment.', 'error');
+            setIsSubmittingOrder(false);
+            return false;
+          }
+
+          const studentCard = tokens.find(t => t.cardNo === tokenCardNo);
+          if (!studentCard) {
+            addToast('Student card not found with that card number.', 'error');
+            setIsSubmittingOrder(false);
+            return false;
+          }
+
+          const balanceRupees = studentCard.balanceRupees || 0;
+          const amountPayable = Math.max(0, orderTotal - balanceRupees);
+          const tokensRequired = Math.ceil(amountPayable / settings.tokenValueInRupees);
+
+          if (studentCard.tokens < tokensRequired) {
+            addToast(`Insufficient tokens! Card has ${studentCard.tokens}, required: ${tokensRequired}`, 'error');
+            setIsSubmittingOrder(false);
+            return false;
+          }
+
+          const orderId = 'HH-' + Math.floor(1000 + Math.random() * 9000);
+
+          // Deduct tokens atomically
+          const result = await db.deductTokensTransaction(
+            studentCard.id,
+            orderTotal,
+            orderId,
+            currentUser?.username || 'unknown',
+            auth.currentUser?.uid || 'local',
+            currentUser?.role || 'staff'
+          );
+
+          extraOrderFields = {
+            id: orderId,
+            tokenCardNo,
+            studentName: studentCard.name,
+            tokensDeducted: result.tokensDeducted,
+            creditApplied: result.creditApplied,
+            creditReturned: result.creditReceived,
+            tokenCardId: studentCard.id
+          };
         }
 
-        const orderId = 'HH-' + Math.floor(1000 + Math.random() * 9000);
+        const createdOrder = await db.createOrder({
+          tableNumber: activeTable,
+          items: currentCart,
+          total: orderTotal,
+          paymentMode,
+          staffId: currentUser?.username || 'unknown',
+          staffName: currentUser?.name || 'unknown',
+          outletId: settings.outletId || 'main_outlet',
+          ...extraOrderFields
+        });
 
-        // Deduct tokens atomically
-        const result = await db.deductTokensTransaction(
-          studentCard.id,
-          orderTotal,
-          orderId,
-          currentUser?.username || 'unknown',
-          auth.currentUser?.uid || 'local',
-          currentUser?.role || 'staff'
-        );
-
-        extraOrderFields = {
-          id: orderId,
-          tokenCardNo,
-          studentName: studentCard.name,
-          tokensDeducted: result.tokensDeducted,
-          creditApplied: result.creditApplied,
-          creditReturned: result.creditReceived
-        };
+        // Write audit log for order created
+        await db.addAuditLog({
+          action: 'orderCreated',
+          actorUid: auth.currentUser?.uid || 'local',
+          actorRole: currentUser?.role || 'staff',
+          targetId: createdOrder.id,
+          outletId: settings.outletId || 'main_outlet',
+          after: { total: orderTotal, paymentMode, tableNumber: activeTable }
+        });
       }
-
-      const createdOrder = await db.createOrder({
-        tableNumber: activeTable,
-        items: currentCart,
-        total: orderTotal,
-        paymentMode,
-        staffId: currentUser?.username || 'unknown',
-        staffName: currentUser?.name || 'unknown',
-        outletId: settings.outletId || 'main_outlet',
-        ...extraOrderFields
-      });
-
-      // Write audit log for order created
-      await db.addAuditLog({
-        action: 'orderCreated',
-        actorUid: auth.currentUser?.uid || 'local',
-        actorRole: currentUser?.role || 'staff',
-        targetId: createdOrder.id,
-        outletId: settings.outletId || 'main_outlet',
-        after: { total: orderTotal, paymentMode, tableNumber: activeTable }
-      });
 
       // Clear cart for this table
       setTableCarts(prev => {
@@ -868,6 +927,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateOrderStatus = async (orderId: string, status: 'pending' | 'completed' | 'cancelled') => {
+    console.log('[updateOrderStatus] orderId:', orderId, '| orders in state:', orders.map(o => o.id));
     const order = orders.find(o => o.id === orderId);
     if (!order) {
       addToast('Order not found.', 'error');
@@ -880,33 +940,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      if (status === 'cancelled' && order.paymentMode === 'tokens' && order.tokenCardNo && order.tokensDeducted) {
-        const studentCard = tokens.find(t => t.cardNo === order.tokenCardNo);
-        if (studentCard) {
-          await db.refundTokensTransaction(
-            studentCard.id,
-            order.tokensDeducted,
-            order.total,
-            orderId,
-            auth.currentUser?.uid || 'local',
-            currentUser?.role || 'owner'
-          );
-        } else {
-          console.warn(`Card ${order.tokenCardNo} not found for refund. Proceeding with cancellation.`);
+      if (db.isFirebaseConfigured()) {
+        const res = await fetch('/api/orders/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, status })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to update order status.');
         }
+      } else {
+        if (status === 'cancelled' && order.paymentMode === 'tokens' && order.tokenCardNo && order.tokensDeducted) {
+          const studentCard = tokens.find(t => t.cardNo === order.tokenCardNo);
+          if (studentCard) {
+            await db.refundTokensTransaction(
+              studentCard.id,
+              order.tokensDeducted,
+              order.total,
+              orderId,
+              auth.currentUser?.uid || 'local',
+              currentUser?.role || 'owner'
+            );
+          } else {
+            console.warn(`Card ${order.tokenCardNo} not found for refund. Proceeding with cancellation.`);
+          }
+        }
+
+        await db.updateOrderStatus(orderId, status);
+
+        await db.addAuditLog({
+          action: status === 'completed' ? 'orderCompleted' : status === 'cancelled' ? 'orderCancelled' : 'orderCreated',
+          actorUid: auth.currentUser?.uid || 'local',
+          actorRole: currentUser?.role || 'owner',
+          targetId: orderId,
+          outletId: settings.outletId || 'main_outlet',
+          before: { orderStatus: order.orderStatus },
+          after: { orderStatus: status }
+        });
       }
-
-      await db.updateOrderStatus(orderId, status);
-
-      await db.addAuditLog({
-        action: status === 'completed' ? 'orderCompleted' : status === 'cancelled' ? 'orderCancelled' : 'orderCreated',
-        actorUid: auth.currentUser?.uid || 'local',
-        actorRole: currentUser?.role || 'owner',
-        targetId: orderId,
-        outletId: settings.outletId || 'main_outlet',
-        before: { orderStatus: order.orderStatus },
-        after: { orderStatus: status }
-      });
 
       addToast(`Order ${orderId} marked as ${status}`, 'success');
     } catch (err: any) {
@@ -928,66 +1000,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (db.isFirebaseConfigured()) {
       try {
-        const firebaseConfig = {
-          apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-          authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-          messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-          appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
-        };
-
-        const secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp');
-        const secondaryAuth = getAuth(secondaryApp);
-
-        // Sign up user in secondary Auth
-        const cred = await createUserWithEmailAndPassword(
-          secondaryAuth,
-          account.emailOrPhone, // email input
-          account.password
-        );
-
-        await secondaryAuth.signOut();
-        await deleteApp(secondaryApp);
-
-        // Save doc in firestore
-        const staffDocData: any = {
-          name: account.name,
-          emailOrPhone: account.emailOrPhone,
-          username: account.username.trim().toLowerCase(),
-          status: 'active',
-          outletId: settings.outletId || 'main_outlet'
-        };
-        if (process.env.NODE_ENV !== 'production') {
-          staffDocData.password = await hashPassword(account.password);
-        }
-
-        const createdStaff = await db.addStaffWithId(cred.user.uid, staffDocData);
-
-        // Write audit log for staff created
-        await db.addAuditLog({
-          action: 'staffCreated',
-          actorUid: auth.currentUser?.uid || 'local',
-          actorRole: 'owner',
-          targetId: createdStaff.id,
-          outletId: settings.outletId || 'main_outlet',
-          after: { username: account.username, name: account.name }
+        const res = await fetch('/api/admin/staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create',
+            data: {
+              ...account,
+              outletId: settings.outletId || 'main_outlet'
+            }
+          })
         });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to create staff account.');
+        }
 
         addToast(`Staff account for ${account.name} created!`, 'success');
         return true;
-      } catch (err) {
-        console.warn('Create Staff Auth Error:', err);
-        let errMsg = 'Failed to create staff account.';
-        const firebaseError = err as { code?: string };
-        if (firebaseError.code === 'auth/email-already-in-use') {
-          errMsg = 'Email already in use.';
-        } else if (firebaseError.code === 'auth/weak-password') {
-          errMsg = 'Password must be at least 6 characters.';
-        } else if (firebaseError.code === 'auth/invalid-email') {
-          errMsg = 'Invalid email format.';
-        }
-        addToast(errMsg, 'error');
+      } catch (err: any) {
+        console.warn('Create Staff API Error:', err);
+        addToast(err.message || 'Failed to create staff account.', 'error');
         return false;
       }
     } else {
@@ -1022,23 +1056,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     const staff = staffList.find(s => s.id === staffId);
     if (!staff) return;
-    const newStatus = staff.status === 'active' ? 'inactive' : 'active';
     try {
-      await db.toggleStaffStatus(staffId);
-      
-      await db.addAuditLog({
-        action: newStatus === 'inactive' ? 'staffDeactivated' : 'staffCreated',
-        actorUid: auth.currentUser?.uid || 'local',
-        actorRole: 'owner',
-        targetId: staffId,
-        outletId: settings.outletId || 'main_outlet',
-        before: { status: staff.status },
-        after: { status: newStatus }
-      });
+      if (db.isFirebaseConfigured()) {
+        const res = await fetch('/api/admin/staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'toggleStatus',
+            data: { uid: staffId }
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to update staff status.');
+        }
+      } else {
+        const newStatus = staff.status === 'active' ? 'inactive' : 'active';
+        await db.toggleStaffStatus(staffId);
+        
+        await db.addAuditLog({
+          action: newStatus === 'inactive' ? 'staffDeactivated' : 'staffCreated',
+          actorUid: auth.currentUser?.uid || 'local',
+          actorRole: 'owner',
+          targetId: staffId,
+          outletId: settings.outletId || 'main_outlet',
+          before: { status: staff.status },
+          after: { status: newStatus }
+        });
+      }
 
       addToast('Staff status changed', 'success');
-    } catch {
-      addToast('Failed to update staff status', 'error');
+    } catch (err: any) {
+      addToast(err.message || 'Failed to update staff status', 'error');
     }
   };
 
@@ -1048,19 +1097,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      await db.deleteStaff(staffId);
+      if (db.isFirebaseConfigured()) {
+        const res = await fetch('/api/admin/staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'delete',
+            data: { uid: staffId }
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to remove staff.');
+        }
+      } else {
+        await db.deleteStaff(staffId);
 
-      await db.addAuditLog({
-        action: 'staffRemoved',
-        actorUid: auth.currentUser?.uid || 'local',
-        actorRole: 'owner',
-        targetId: staffId,
-        outletId: settings.outletId || 'main_outlet'
-      });
+        await db.addAuditLog({
+          action: 'staffRemoved',
+          actorUid: auth.currentUser?.uid || 'local',
+          actorRole: 'owner',
+          targetId: staffId,
+          outletId: settings.outletId || 'main_outlet'
+        });
+      }
 
-      addToast('Staff account deleted', 'success');
-    } catch {
-      addToast('Failed to delete staff account', 'error');
+      addToast('Staff account removed.', 'success');
+    } catch (err: any) {
+      addToast(err.message || 'Failed to remove staff.', 'error');
     }
   };
 
@@ -1151,60 +1215,85 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
-    // Staff monthly limit check
-    if (currentUser?.role === 'staff') {
-      const staffProfile = staffList.find(s => s.username === currentUser.username);
-      const limit = staffProfile?.monthlyTokenLimit ?? 1005; // default fallback if missing
-      
-      const now = new Date();
-      const currentMonthTxs = tokenTransactions.filter(tx => {
-        if (tx.soldBy !== currentUser.username) return false;
-        if (tx.type !== 'recharge') return false;
-        const txDate = new Date(tx.createdAt);
-        return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
-      });
-      const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
-
-      if (currentMonthTokensSold + account.tokens > limit) {
-        addToast(`Provision exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(0)} tokens`, 'error');
+    if (db.isFirebaseConfigured()) {
+      try {
+        const res = await fetch('/api/tokens/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: account.name,
+            cardNo: account.cardNo,
+            initialTokens: account.tokens,
+            outletId: settings.outletId || 'main_outlet'
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to create token card.');
+        }
+        addToast(`Card issued successfully for ${account.name}!`, 'success');
+        return true;
+      } catch (err: any) {
+        addToast(err.message || 'Failed to create token account.', 'error');
         return false;
       }
-    }
+    } else {
+      // LocalStorage mode
+      try {
+        // Staff monthly limit check
+        if (currentUser?.role === 'staff') {
+          const staffProfile = staffList.find(s => s.username === currentUser.username);
+          const limit = staffProfile?.monthlyTokenLimit ?? 1005; // default fallback if missing
+          
+          const now = new Date();
+          const currentMonthTxs = tokenTransactions.filter(tx => {
+            if (tx.soldBy !== currentUser.username) return false;
+            if (tx.type !== 'recharge') return false;
+            const txDate = new Date(tx.createdAt);
+            return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+          });
+          const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
 
-    try {
-      const createdCard = await db.addTokenAccount({
-        ...account,
-        outletId: settings.outletId || 'main_outlet'
-      });
-      
-      // Log transaction if card was initialized with tokens
-      if (account.tokens > 0) {
-        await db.addTokenTransaction({
-          type: 'recharge',
-          studentId: createdCard.id,
-          studentName: createdCard.name,
-          cardNo: createdCard.cardNo,
-          tokens: account.tokens,
-          amount: account.tokens * settings.tokenValueInRupees,
-          soldBy: currentUser?.username || 'unknown',
+          if (currentMonthTokensSold + account.tokens > limit) {
+            addToast(`Provision exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(0)} tokens`, 'error');
+            return false;
+          }
+        }
+
+        const createdCard = await db.addTokenAccount({
+          ...account,
           outletId: settings.outletId || 'main_outlet'
         });
+        
+        // Log transaction if card was initialized with tokens
+        if (account.tokens > 0) {
+          await db.addTokenTransaction({
+            type: 'recharge',
+            studentId: createdCard.id,
+            studentName: createdCard.name,
+            cardNo: createdCard.cardNo,
+            tokens: account.tokens,
+            amount: account.tokens * settings.tokenValueInRupees,
+            soldBy: currentUser?.username || 'unknown',
+            outletId: settings.outletId || 'main_outlet'
+          });
 
-        // Audit Log for token recharged on create
-        await db.addAuditLog({
-          action: 'tokenRecharged',
-          actorUid: auth.currentUser?.uid || 'local',
-          actorRole: currentUser?.role || 'owner',
-          targetId: createdCard.id,
-          outletId: settings.outletId || 'main_outlet',
-          after: { tokens: account.tokens }
-        });
+          // Audit Log for token recharged on create
+          await db.addAuditLog({
+            action: 'tokenRecharged',
+            actorUid: auth.currentUser?.uid || 'local',
+            actorRole: currentUser?.role || 'owner',
+            targetId: createdCard.id,
+            outletId: settings.outletId || 'main_outlet',
+            after: { tokens: account.tokens }
+          });
+        }
+        addToast(`Token card for ${account.name} created!`, 'success');
+        return true;
+      } catch {
+        addToast('Failed to create token card.', 'error');
+        return false;
       }
-      addToast(`Token card for ${account.name} created!`, 'success');
-      return true;
-    } catch {
-      addToast('Failed to create token card.', 'error');
-      return false;
     }
   };
 
@@ -1229,25 +1318,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    try {
-      const tokenBefore = tokens.find(t => t.id === tokenId);
-      await db.updateTokenAccount(tokenId, { ...updatedFields, updatedAt: new Date().toISOString() });
-      
-      await db.addAuditLog({
-        action: 'tokenAdjusted',
-        actorUid: auth.currentUser?.uid || 'local',
-        actorRole: 'owner',
-        targetId: tokenId,
-        outletId: settings.outletId || 'main_outlet',
-        before: tokenBefore ? { tokens: tokenBefore.tokens, cardNo: tokenBefore.cardNo } : null,
-        after: updatedFields
-      });
+    if (db.isFirebaseConfigured()) {
+      try {
+        const res = await fetch('/api/tokens/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tokenId, updatedFields })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to update token card.');
+        }
+        addToast('Token card updated successfully!', 'success');
+        return true;
+      } catch (err: any) {
+        addToast(err.message || 'Failed to update token card.', 'error');
+        return false;
+      }
+    } else {
+      // LocalStorage mode
+      try {
+        const tokenBefore = tokens.find(t => t.id === tokenId);
+        await db.updateTokenAccount(tokenId, { ...updatedFields, updatedAt: new Date().toISOString() });
+        
+        await db.addAuditLog({
+          action: 'tokenAdjusted',
+          actorUid: auth.currentUser?.uid || 'local',
+          actorRole: 'owner',
+          targetId: tokenId,
+          outletId: settings.outletId || 'main_outlet',
+          before: tokenBefore ? { tokens: tokenBefore.tokens, cardNo: tokenBefore.cardNo } : null,
+          after: updatedFields
+        });
 
-      addToast('Token card updated successfully!', 'success');
-      return true;
-    } catch {
-      addToast('Failed to update token card.', 'error');
-      return false;
+        addToast('Token card updated successfully!', 'success');
+        return true;
+      } catch {
+        addToast('Failed to update token card.', 'error');
+        return false;
+      }
     }
   };
 
@@ -1256,59 +1365,98 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addToast('Demo Mode: Deleting token accounts is restricted in the preview sandbox.', 'warning');
       return false;
     }
-    try {
-      await db.deleteTokenAccount(tokenId);
-      addToast('Token card deleted successfully.', 'success');
-      return true;
-    } catch {
-      addToast('Failed to delete token card.', 'error');
-      return false;
+    if (db.isFirebaseConfigured()) {
+      try {
+        const res = await fetch('/api/tokens/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tokenId })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to delete token card.');
+        }
+        addToast('Token card deleted successfully.', 'success');
+        return true;
+      } catch (err: any) {
+        addToast(err.message || 'Failed to delete token card.', 'error');
+        return false;
+      }
+    } else {
+      // LocalStorage mode
+      try {
+        await db.deleteTokenAccount(tokenId);
+        addToast('Token card deleted successfully.', 'success');
+        return true;
+      } catch {
+        addToast('Failed to delete token card.', 'error');
+        return false;
+      }
     }
   };
 
   const sellTokens = async (studentId: string, tokensToAdd: number, amountPaid: number): Promise<boolean> => {
-    // Staff monthly limit check
-    if (currentUser?.role === 'staff') {
-      const staffProfile = staffList.find(s => s.username === currentUser.username);
-      const limit = staffProfile?.monthlyTokenLimit ?? 1000;
-      
-      const now = new Date();
-      const currentMonthTxs = tokenTransactions.filter(tx => {
-        if (tx.soldBy !== currentUser.username) return false;
-        if (tx.type !== 'recharge') return false;
-        const txDate = new Date(tx.createdAt);
-        return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
-      });
-      const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
-
-      if (currentMonthTokensSold + tokensToAdd > limit) {
-        addToast(`Sale exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(0)} tokens`, 'error');
+    if (db.isFirebaseConfigured()) {
+      try {
+        const res = await fetch('/api/tokens/recharge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId, tokens: tokensToAdd, amount: amountPaid })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to recharge tokens.');
+        }
+        addToast(`Successfully recharged ${tokensToAdd} tokens!`, 'success');
+        return true;
+      } catch (err: any) {
+        addToast(err.message || 'Failed to recharge tokens.', 'error');
         return false;
       }
-    }
+    } else {
+      // Staff monthly limit check
+      if (currentUser?.role === 'staff') {
+        const staffProfile = staffList.find(s => s.username === currentUser.username);
+        const limit = staffProfile?.monthlyTokenLimit ?? 1000;
+        
+        const now = new Date();
+        const currentMonthTxs = tokenTransactions.filter(tx => {
+          if (tx.soldBy !== currentUser.username) return false;
+          if (tx.type !== 'recharge') return false;
+          const txDate = new Date(tx.createdAt);
+          return txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+        });
+        const currentMonthTokensSold = currentMonthTxs.reduce((sum, tx) => sum + tx.tokens, 0);
 
-    try {
-      const studentCard = tokens.find(t => t.id === studentId);
-      if (!studentCard) {
-        addToast('Student card not found.', 'error');
-        return false;
+        if (currentMonthTokensSold + tokensToAdd > limit) {
+          addToast(`Sale exceeds monthly limit! Allowed remaining: ${(limit - currentMonthTokensSold).toFixed(0)} tokens`, 'error');
+          return false;
+        }
       }
 
-      await db.rechargeTokensTransaction(
-        studentId,
-        tokensToAdd,
-        amountPaid,
-        currentUser?.username || 'unknown',
-        auth.currentUser?.uid || 'local',
-        currentUser?.role || 'staff'
-      );
+      try {
+        const studentCard = tokens.find(t => t.id === studentId);
+        if (!studentCard) {
+          addToast('Student card not found.', 'error');
+          return false;
+        }
 
-      addToast(`Successfully sold ${tokensToAdd} tokens to ${studentCard.name}!`, 'success');
-      return true;
-    } catch (error: any) {
-      console.error("Failed to sell tokens:", error);
-      addToast(error.message || 'Failed to complete token sale.', 'error');
-      return false;
+        await db.rechargeTokensTransaction(
+          studentId,
+          tokensToAdd,
+          amountPaid,
+          currentUser?.username || 'unknown',
+          auth.currentUser?.uid || 'local',
+          currentUser?.role || 'staff'
+        );
+
+        addToast(`Successfully sold ${tokensToAdd} tokens to ${studentCard.name}!`, 'success');
+        return true;
+      } catch (error: any) {
+        console.error("Failed to sell tokens:", error);
+        addToast(error.message || 'Failed to complete token sale.', 'error');
+        return false;
+      }
     }
   };
 
@@ -1323,24 +1471,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
     try {
-      const staffBefore = staffList.find(s => s.id === staffId);
-      await db.updateStaffAccount(staffId, { monthlyTokenLimit: limit });
-
-      await db.addAuditLog({
-        action: 'monthlyLimitChanged',
-        actorUid: auth.currentUser?.uid || 'local',
-        actorRole: 'owner',
-        targetId: staffId,
-        outletId: settings.outletId || 'main_outlet',
-        before: { monthlyTokenLimit: staffBefore?.monthlyTokenLimit },
-        after: { monthlyTokenLimit: limit }
+      const response = await fetch('/api/staff/update-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, limit })
       });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update staff limit via API');
+      }
 
       addToast('Staff monthly token limit updated successfully!', 'success');
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to update staff limit:", err);
-      addToast('Failed to update staff limit.', 'error');
+      addToast(err.message || 'Failed to update staff limit.', 'error');
       return false;
     }
   };
@@ -1354,6 +1499,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addToast('Permission denied: only the owner can adjust balances manually.', 'error');
       return false;
     }
+
     try {
       const studentCard = tokens.find(t => t.id === studentId);
       if (!studentCard) {
@@ -1361,14 +1507,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      await db.adjustTokensTransaction(
-        studentId,
-        targetTokens,
-        studentCard.balanceRupees || 0,
-        reason,
-        auth.currentUser?.uid || 'local',
-        'owner'
-      );
+      if (db.isFirebaseConfigured()) {
+        const res = await fetch('/api/tokens/adjust', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId, targetTokens, reason })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Failed to adjust tokens.');
+        }
+      } else {
+        await db.adjustTokensTransaction(
+          studentId,
+          targetTokens,
+          studentCard.balanceRupees || 0,
+          reason,
+          auth.currentUser?.uid || 'local',
+          'owner'
+        );
+      }
+      
       addToast('Token balance adjusted successfully!', 'success');
       return true;
     } catch (err: any) {
@@ -1468,6 +1627,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         usingFirebase,
         syncDataToCloud,
         currentUser,
+        authLoading,
         activeTable,
         tableCarts,
         toasts,

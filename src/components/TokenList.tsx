@@ -5,17 +5,18 @@ import { useApp } from '../context/AppContext';
 import { TokenAccount } from '../types';
 import { TokenIcon } from './TokenIcon';
 import { InfoTag } from './InfoTag';
-import { MagnifyingGlass } from '@phosphor-icons/react';
+import { MagnifyingGlass, ClockCounterClockwise, PencilSimple, Trash, PlusCircle } from '@phosphor-icons/react';
 import { Pagination } from './Pagination';
 
 interface TokenListProps {
   onStartEdit: (token: TokenAccount) => void;
   onViewHistory: (token: TokenAccount) => void;
+  onRecharge: (token: TokenAccount) => void;
 }
 
 const ITEMS_PER_PAGE = 8;
 
-export function TokenList({ onStartEdit, onViewHistory }: TokenListProps) {
+export function TokenList({ onStartEdit, onViewHistory, onRecharge }: TokenListProps) {
   const { tokens, removeToken, confirmAction } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -135,21 +136,31 @@ export function TokenList({ onStartEdit, onViewHistory }: TokenListProps) {
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => onViewHistory(token)}
-                          className="px-3 py-1.5 h-8 min-h-0 border border-border rounded-lg text-[11px] font-bold text-text-muted hover:text-foreground hover:bg-surface-container/30 transition-colors cursor-pointer"
+                          className="w-8 h-8 border border-border rounded-lg text-text-muted hover:text-foreground hover:bg-surface-container/30 transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                          title="History Ledger"
                         >
-                          History
+                          <ClockCounterClockwise size={14} weight="bold" />
+                        </button>
+                        <button
+                          onClick={() => onRecharge(token)}
+                          className="w-8 h-8 border border-success/20 rounded-lg text-success hover:bg-success/5 transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                          title="Recharge Balance"
+                        >
+                          <PlusCircle size={14} weight="bold" />
                         </button>
                         <button
                           onClick={() => onStartEdit(token)}
-                          className="px-3 py-1.5 h-8 min-h-0 border border-primary/20 rounded-lg text-[11px] font-bold text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                          className="w-8 h-8 border border-primary/20 rounded-lg text-primary hover:bg-primary/5 transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                          title="Edit Card Details"
                         >
-                          Recharge
+                          <PencilSimple size={14} weight="bold" />
                         </button>
                         <button
                           onClick={() => handleDelete(token.id, token.name, token.cardNo)}
-                          className="px-3 py-1.5 h-8 min-h-0 border border-error/20 rounded-lg text-[11px] font-bold text-error hover:bg-error/5 transition-colors cursor-pointer"
+                          className="w-8 h-8 border border-error/20 rounded-lg text-error hover:bg-error/5 transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                          title="Delete Card"
                         >
-                          Delete
+                          <Trash size={14} weight="bold" />
                         </button>
                       </div>
                     </td>

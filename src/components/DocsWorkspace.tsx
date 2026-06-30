@@ -85,7 +85,7 @@ export function DocsWorkspace() {
                   <li><strong>Tokens (NFC Cards):</strong> Debits from the student's physical token card balance.</li>
                 </ul>
               </div>
-              <div className="flex flex-col gap-2 border-t border-border/40 pt-3.5 bg-blue-500/5 p-4.5 rounded-lg border border-blue-500/10">
+              <div className="flex flex-col gap-2 bg-blue-500/5 p-4.5 rounded-lg border border-blue-500/10">
                 <h3 className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
                   <CreditCard size={15} />
                   Token Billing & Store Credit Math (Change Wallet)

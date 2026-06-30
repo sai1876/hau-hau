@@ -61,6 +61,7 @@ export interface Order {
   tokensDeducted?: number;
   creditApplied?: number;
   creditReturned?: number;
+  tokenCardId?: string;
   outletId?: string;
   isDemo?: boolean;
 }
@@ -146,6 +147,8 @@ export interface TokenTransaction {
   createdAt: string;
   outletId?: string;
   isDemo?: boolean;
+  creditApplied?: number;
+  creditReturned?: number;
 }
 
 export interface AuditLog {

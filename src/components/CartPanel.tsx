@@ -26,16 +26,9 @@ export function CartPanel({ onClose }: CartPanelProps) {
   const [tokenCardInput, setTokenCardInput] = useState('');
 
   // Grok AI States
-  const [grokApiKey, setGrokApiKey] = useState('');
   const [isAnalyzingSpend, setIsAnalyzingSpend] = useState(false);
   const [spendInsights, setSpendInsights] = useState<any>(null);
   const [showSpendInsights, setShowSpendInsights] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setGrokApiKey(localStorage.getItem('hau_hau_grok_api_key') || '');
-    }
-  }, []);
 
   // Reset insights when card input changes
   useEffect(() => {
@@ -66,7 +59,6 @@ export function CartPanel({ onClose }: CartPanelProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-grok-api-key': grokApiKey,
         },
         body: JSON.stringify({
           action: 'spending-insights',
@@ -127,7 +119,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
 
   if (!activeTable) {
     return (
-      <div className="minimal-card p-6 rounded-xl h-full flex flex-col items-center justify-center text-center relative overflow-hidden bg-surface border border-border">
+      <div className="minimal-card p-6 rounded-xl h-full flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden bg-surface border border-border">
         <div className="absolute -right-16 -top-16 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
         
         <div className="w-12 h-12 rounded-full bg-surface border border-border flex items-center justify-center text-primary mb-4 shadow-inner animate-bounce">
@@ -375,13 +367,13 @@ export function CartPanel({ onClose }: CartPanelProps) {
 
                              {showSpendInsights && spendInsights && (
                                <div className="bg-blue-500/10 border border-blue-500/20 p-2.5 rounded-lg flex flex-col gap-1.5 text-[10px] text-text-muted animate-slide-in relative">
-                                 <button
-                                   type="button"
-                                   onClick={() => setShowSpendInsights(false)}
-                                   className="absolute top-1 right-2 hover:text-white font-bold"
-                                 >
-                                   ×
-                                 </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowSpendInsights(false)}
+                                    className="absolute top-2 right-2 text-text-muted hover:text-white hover:bg-white/10 rounded w-4.5 h-4.5 flex items-center justify-center transition-colors text-[14px] font-bold leading-none cursor-pointer"
+                                  >
+                                    &times;
+                                  </button>
                                  <div className="font-semibold">
                                    <span className="text-blue-400 font-bold block">Rate: {spendInsights.consumptionRate}</span>
                                    <span className="block mt-1"><strong className="text-foreground">Habits:</strong> {spendInsights.spendingHabits}</span>

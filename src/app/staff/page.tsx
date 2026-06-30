@@ -20,7 +20,8 @@ import { DocsWorkspace } from '@/components/DocsWorkspace';
 export default function StaffDashboardPage() {
   const router = useRouter();
   const { 
-    currentUser, 
+    currentUser,
+    authLoading,
     logout, 
     menu, 
     orders, 
@@ -31,7 +32,8 @@ export default function StaffDashboardPage() {
     tokenTransactions,
     staffList,
     sellTokens,
-    settings
+    settings,
+    addToast
   } = useApp();
 
   const tokenValue = settings?.tokenValueInRupees || 30;
@@ -51,17 +53,10 @@ export default function StaffDashboardPage() {
   const [rechargeAmount, setRechargeAmount] = useState('');
 
   // Grok AI States
-  const [grokApiKey, setGrokApiKey] = useState('');
   const [isOptimizingQueue, setIsOptimizingQueue] = useState(false);
   const [queueOptimization, setQueueOptimization] = useState<any>(null);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setGrokApiKey(localStorage.getItem('hau_hau_grok_api_key') || '');
-    }
-  }, []);
 
   const handleOptimizeQueue = async () => {
     setIsOptimizingQueue(true);
@@ -77,7 +72,6 @@ export default function StaffDashboardPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-grok-api-key': grokApiKey,
         },
         body: JSON.stringify({
           action: 'queue-optimize',
@@ -106,7 +100,7 @@ export default function StaffDashboardPage() {
     const todayStr = new Date().toLocaleDateString('en-CA');
     return orders
       .filter(order => {
-        if (order.staffId !== currentUser?.username) return false;
+        if (order.staffId !== currentUser?.id && order.staffId !== currentUser?.username) return false;
         if (historyDateFilter === 'today') {
           const orderDateStr = new Date(order.createdAt).toLocaleDateString('en-CA');
           return orderDateStr === todayStr;
@@ -127,13 +121,23 @@ export default function StaffDashboardPage() {
     });
   }, [tokenTransactions, currentUser?.username]);
 
-  // Authenticate check
+  // Authenticate check — wait for auth to resolve before redirecting
   useEffect(() => {
-    const stored = localStorage.getItem('hau_hau_session');
-    if (!stored && !currentUser) {
+    if (authLoading) return;
+    if (!currentUser) {
       router.push('/login');
+    } else if (currentUser.role !== 'staff') {
+      router.push('/owner');
     }
-  }, [currentUser, router]);
+  }, [authLoading, currentUser, router]);
+
+  if (authLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background text-text-muted font-bold text-xs uppercase tracking-widest min-h-screen">
+        Loading...
+      </div>
+    );
+  }
 
   if (!currentUser || currentUser.role !== 'staff') {
     return (
@@ -200,7 +204,7 @@ export default function StaffDashboardPage() {
     const amtVal = parseFloat(rechargeAmount);
 
     if (isNaN(tkVal) || tkVal <= 0 || isNaN(amtVal) || amtVal <= 0) {
-      alert('Please enter a valid positive token count.');
+      addToast('Please enter a valid positive token count.', 'error');
       return;
     }
 
@@ -245,7 +249,7 @@ export default function StaffDashboardPage() {
       
       {/* Demo Banner */}
       {(currentUser?.username === 'owner-demo' || currentUser?.username === 'staff-demo') && (
-        <div className="bg-gradient-to-r from-red-700 via-rose-600 to-red-700 text-white text-center py-2 px-4 text-[10px] sm:text-xs font-bold tracking-wider uppercase border-b border-red-800 shadow-md relative z-50 flex items-center justify-center gap-2 shrink-0 select-none">
+        <div className="bg-linear-to-r from-red-700 via-rose-600 to-red-700 text-white text-center py-2 px-4 text-[10px] sm:text-xs font-bold tracking-wider uppercase border-b border-red-800 shadow-md relative z-50 flex items-center justify-center gap-2 shrink-0 select-none">
           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />
           <span>This is a demo fake page. Access to original accounts cannot be provided for college verification.</span>
         </div>
@@ -419,7 +423,7 @@ export default function StaffDashboardPage() {
 
                 {/* Menu items list (internal scroll) */}
                 <div className="flex-1 overflow-y-auto pr-1 pb-24 lg:pb-12">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1.5">
                     {filteredMenu.map((item) => (
                       <MenuItemCard key={item.id} item={item} onCustomize={setCustomizingItem} />
                     ))}
@@ -428,7 +432,7 @@ export default function StaffDashboardPage() {
               </div>
 
               {/* Cart Column (Desktop, always visible, full height) */}
-              <div className="hidden lg:block w-80 xl:w-96 shrink-0 h-full overflow-hidden">
+              <div className="hidden lg:flex lg:flex-col w-80 xl:w-96 shrink-0 h-full overflow-hidden">
                 <CartPanel />
               </div>
             </div>
@@ -620,25 +624,43 @@ export default function StaffDashboardPage() {
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-border bg-surface-container/10">
-                                    {studentTransactions.map((tx) => (
-                                      <tr key={tx.id} className="hover:bg-surface-container/20 transition-colors">
-                                        <td className="p-2.5 text-text-muted font-medium">
-                                          {new Date(tx.createdAt).toLocaleString([], {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                          })}
-                                        </td>
-                                        <td className={`p-2.5 font-mono font-bold ${tx.tokens < 0 ? 'text-error' : 'text-primary'}`}>
-                                          {tx.tokens > 0 ? '+' : ''}{tx.tokens} tokens
-                                        </td>
-                                        <td className={`p-2.5 font-mono font-bold ${tx.amount < 0 ? 'text-error' : 'text-success'}`}>
-                                          {tx.amount > 0 ? '+' : ''}₹{tx.amount.toFixed(2)}
-                                        </td>
-                                        <td className="p-2.5 text-foreground font-semibold">{tx.soldBy}</td>
-                                      </tr>
-                                    ))}
+                                    {studentTransactions.map((tx) => {
+                                      const isDeduction = tx.type === 'deduction';
+                                      const displayTokens = isDeduction ? -Math.abs(tx.tokens) : tx.tokens;
+                                      const displayAmount = isDeduction ? -Math.abs(tx.amount) : tx.amount;
+                                      const creditApplied = tx.creditApplied || 0;
+                                      const creditReturned = tx.creditReturned || 0;
+
+                                      return (
+                                        <tr key={tx.id} className="hover:bg-surface-container/20 transition-colors">
+                                          <td className="p-2.5 text-text-muted font-medium">
+                                            {new Date(tx.createdAt).toLocaleString([], {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              hour: '2-digit',
+                                              minute: '2-digit'
+                                            })}
+                                          </td>
+                                          <td className={`p-2.5 font-mono font-bold ${displayTokens < 0 ? 'text-error' : 'text-primary'}`}>
+                                            {displayTokens > 0 ? '+' : ''}{displayTokens} tokens
+                                          </td>
+                                          <td className={`p-2.5 font-mono font-bold ${displayAmount < 0 ? 'text-error' : 'text-success'}`}>
+                                            {displayAmount > 0 ? '+' : ''}₹{displayAmount.toFixed(2)}
+                                            {creditApplied > 0 && (
+                                              <div className="text-[10px] text-error font-medium mt-0.5">
+                                                -₹{creditApplied.toFixed(2)} Store Credit Used
+                                              </div>
+                                            )}
+                                            {creditReturned > 0 && (
+                                              <div className="text-[10px] text-success font-medium mt-0.5">
+                                                +₹{creditReturned.toFixed(2)} Store Credit Added
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td className="p-2.5 text-foreground font-semibold">{tx.soldBy}</td>
+                                        </tr>
+                                      );
+                                    })}
                                   </tbody>
                               </table>
                             </div>
@@ -677,13 +699,13 @@ export default function StaffDashboardPage() {
                           <div className="relative flex items-center">
                             <input
                               type="number"
-                              step="0.01"
                               required
-                              min="0.01"
+                              min="1"
                               placeholder="e.g. 10"
+                              disabled={isPurseOverLimit}
                               value={rechargeTokens}
                               onChange={(e) => handleRechargeTokensChange(e.target.value)}
-                              className="minimal-input pl-3.5 pr-8 py-2.5 text-xs text-white placeholder-text-muted/30 font-mono w-full"
+                              className="minimal-input pl-3.5 pr-8 py-2.5 text-xs text-white placeholder-text-muted/30 font-mono w-full disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <span className="absolute right-2.5 flex items-center select-none pointer-events-none">
                               <TokenIcon className="w-3.5 h-3.5 text-text-muted" />
@@ -705,9 +727,10 @@ export default function StaffDashboardPage() {
                               required
                               min="0.3"
                               placeholder="e.g. 300"
+                              disabled={isPurseOverLimit}
                               value={rechargeAmount}
                               onChange={(e) => handleRechargeAmountChange(e.target.value)}
-                              className="minimal-input pl-6 pr-3.5 py-2.5 text-xs text-white placeholder-text-muted/30 font-mono w-full"
+                              className="minimal-input pl-6 pr-3.5 py-2.5 text-xs text-white placeholder-text-muted/30 font-mono w-full disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                           </div>
                         </div>
@@ -719,9 +742,11 @@ export default function StaffDashboardPage() {
 
                       <button
                         type="submit"
-                        className="minimal-btn-primary w-full text-white font-bold py-2.5 rounded-lg transition-all active:scale-[0.98] text-xs h-11 flex items-center justify-center cursor-pointer mt-2"
+                        disabled={isPurseOverLimit}
+                        className="minimal-btn-primary w-full text-white font-bold py-2.5 rounded-lg transition-all active:scale-[0.98] text-xs h-11 flex items-center justify-center cursor-pointer mt-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-surface-container/20 disabled:text-text-muted disabled:border-border"
+                        title={isPurseOverLimit ? "Quota limit reached. Recharging disabled." : "Sell & Recharge Card"}
                       >
-                        Sell & Recharge Card
+                        {isPurseOverLimit ? 'Limit Reached (Disabled)' : 'Sell & Recharge Card'}
                       </button>
                     </form>
                   </div>
@@ -739,10 +764,12 @@ export default function StaffDashboardPage() {
                         </div>
                         <button
                           type="button"
+                          disabled={isPurseOverLimit}
                           onClick={() => setIsIssuingNewCard(true)}
-                          className="minimal-btn-primary w-full font-bold text-xs h-10 mt-1 cursor-pointer flex items-center justify-center"
+                          className="minimal-btn-primary w-full font-bold text-xs h-10 mt-1 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-surface-container/20 disabled:text-text-muted disabled:border-border cursor-pointer"
+                          title={isPurseOverLimit ? "Quota limit reached. Card creation disabled." : "Issue New Card"}
                         >
-                          + Issue New Card
+                          {isPurseOverLimit ? 'Limit Reached (Disabled)' : '+ Issue New Card'}
                         </button>
                       </div>
                     ) : (
@@ -961,7 +988,7 @@ export default function StaffDashboardPage() {
                 <div className="flex flex-col gap-2.5">
                   {queueOptimization.batchingSuggestions?.map((sug: any, idx: number) => (
                     <div key={idx} className="p-3.5 bg-primary/5 border border-primary/15 rounded-xl flex flex-col gap-1 text-xs">
-                      <span className="font-bold text-foreground flex items-center gap-1.5 font-bold">
+                      <span className="font-bold text-foreground flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                         {sug.title}
                       </span>

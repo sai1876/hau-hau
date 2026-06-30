@@ -51,7 +51,7 @@ export function ProfileSection() {
 
   // Staff-specific stats
   const staffOrders = orders.filter(
-    o => o.staffId === currentUser.username && o.orderStatus === 'completed'
+    o => (o.staffId === currentUser.id || o.staffId === currentUser.username) && o.orderStatus === 'completed'
   );
   const staffVolume = staffOrders.reduce((sum, o) => sum + o.total, 0);
 
