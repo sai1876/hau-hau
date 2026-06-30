@@ -19,13 +19,8 @@ if (!apps.length) {
       }),
     });
   } else if (process.env.NODE_ENV === 'production') {
-    try {
-      // Initialize with Application Default Credentials in production
-      app = initializeApp();
-    } catch (e) {
-      console.warn("Firebase Admin SDK failed to initialize in production. Missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.", e);
-      app = null;
-    }
+    console.warn("Firebase Admin SDK credentials not configured in production (missing FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY). Admin features disabled — using client-side fallback.");
+    app = null;
   } else {
     console.warn("Firebase Admin SDK running in development mode without server credentials. authAdmin and dbAdmin will be disabled.");
   }
