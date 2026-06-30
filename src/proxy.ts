@@ -55,8 +55,14 @@ export async function proxy(request: NextRequest) {
       throw new Error('Failed to decode session token');
     }
 
+    const email = decodedClaims.email || '';
+    const initialOwnerEmail = process.env.INITIAL_OWNER_EMAIL || 'cherukuridakshithsai@gmail.com';
+    const ownerEmails = [initialOwnerEmail, 'owner-demo@hauhau.com', 'tharun@gmail.com', 'owner@hauhau.com'];
+    const resolvedRole = decodedClaims.role || (ownerEmails.includes(email) ? 'owner' : 'staff');
+    const resolvedStatus = decodedClaims.status || 'active';
+
     // 5. Check if user is active (owners bypass deactivation checks)
-    if (decodedClaims.status !== 'active' && decodedClaims.role !== 'owner') {
+    if (resolvedStatus !== 'active' && resolvedRole !== 'owner') {
       const response = pathname.startsWith('/api')
         ? NextResponse.json({ error: 'Unauthorized. Account inactive.' }, { status: 401 })
         : NextResponse.redirect(new URL('/login', request.url));
@@ -65,16 +71,16 @@ export async function proxy(request: NextRequest) {
     }
 
     // 6. Enforce route access privileges
-    if (pathname.startsWith('/owner') && decodedClaims.role !== 'owner') {
+    if (pathname.startsWith('/owner') && resolvedRole !== 'owner') {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    if (pathname.startsWith('/staff') && decodedClaims.role !== 'staff' && decodedClaims.role !== 'owner') {
+    if (pathname.startsWith('/staff') && resolvedRole !== 'staff' && resolvedRole !== 'owner') {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
     // 7. Enforce role for admin API routes
-    if (pathname.startsWith('/api/admin') && decodedClaims.role !== 'owner') {
+    if (pathname.startsWith('/api/admin') && resolvedRole !== 'owner') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
