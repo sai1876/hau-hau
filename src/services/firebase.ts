@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -13,7 +13,9 @@ const firebaseConfig = {
 
 // Initialize Firebase for SSR compatibility
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const firestore = getFirestore(app);
+const firestore = initializeFirestore(app, {
+  ignoreUndefinedProperties: true
+});
 const auth = getAuth(app);
 
 export { app, firestore, auth };

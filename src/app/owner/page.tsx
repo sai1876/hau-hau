@@ -31,6 +31,8 @@ import {
   Gear,
   PresentationChart,
   BookOpen,
+  Plus,
+  Trash,
 } from '@phosphor-icons/react';
 import { InfoTag } from '@/components/InfoTag';
 import { DocsWorkspace } from '@/components/DocsWorkspace';
@@ -160,6 +162,14 @@ export default function OwnerDashboardPage() {
     popular: false
   });
 
+  // Customization states for creating menu item
+  const [itemCustomizable, setItemCustomizable] = useState(false);
+  const [itemAddons, setItemAddons] = useState<{ name: string; price: number }[]>([]);
+  const [itemSpices, setItemSpices] = useState<string[]>([]);
+  const [newAddonName, setNewAddonName] = useState('');
+  const [newAddonPrice, setNewAddonPrice] = useState('');
+  const [newSpiceName, setNewSpiceName] = useState('');
+
   // State for editing menu item
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
@@ -250,6 +260,14 @@ export default function OwnerDashboardPage() {
   const [editDescription, setEditDescription] = useState('');
   const [editPrepTime, setEditPrepTime] = useState('');
   const [editTags, setEditTags] = useState({ spicy: false, veg: false, popular: false });
+
+  // Customization states for editing menu item
+  const [editCustomizable, setEditCustomizable] = useState(false);
+  const [editAddons, setEditAddons] = useState<{ name: string; price: number }[]>([]);
+  const [editSpices, setEditSpices] = useState<string[]>([]);
+  const [editNewAddonName, setEditNewAddonName] = useState('');
+  const [editNewAddonPrice, setEditNewAddonPrice] = useState('');
+  const [editNewSpiceName, setEditNewSpiceName] = useState('');
 
   // Authenticate check
   useEffect(() => {
@@ -386,7 +404,12 @@ export default function OwnerDashboardPage() {
       category: finalCategory,
       description: itemDescription || '',
       prepTime: itemPrepTime || '5 mins',
-      tags
+      tags,
+      customizable: itemCustomizable,
+      customizationOptions: itemCustomizable ? {
+        addons: itemAddons,
+        spices: itemSpices.length > 0 ? itemSpices : undefined
+      } : undefined
     });
 
     // Reset Form
@@ -397,6 +420,12 @@ export default function OwnerDashboardPage() {
     setItemDescription('');
     setItemPrepTime('5 mins');
     setItemTags({ spicy: false, veg: false, popular: false });
+    setItemCustomizable(false);
+    setItemAddons([]);
+    setItemSpices([]);
+    setNewAddonName('');
+    setNewAddonPrice('');
+    setNewSpiceName('');
   };
 
   const handleStartEdit = (item: MenuItem) => {
@@ -412,6 +441,12 @@ export default function OwnerDashboardPage() {
       veg: item.tags?.includes('veg') || false,
       popular: item.tags?.includes('popular') || false
     });
+    setEditCustomizable(item.customizable || false);
+    setEditAddons(item.customizationOptions?.addons || []);
+    setEditSpices(item.customizationOptions?.spices || []);
+    setEditNewAddonName('');
+    setEditNewAddonPrice('');
+    setEditNewSpiceName('');
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -442,7 +477,12 @@ export default function OwnerDashboardPage() {
       category: finalCategory,
       description: editDescription,
       prepTime: editPrepTime,
-      tags
+      tags,
+      customizable: editCustomizable,
+      customizationOptions: {
+        addons: editCustomizable ? editAddons : [],
+        spices: editCustomizable && editSpices.length > 0 ? editSpices : undefined
+      }
     });
 
     if (success) {
@@ -459,7 +499,30 @@ export default function OwnerDashboardPage() {
 
   // Render Collection Distribution Chart
   const renderDistributionChart = () => {
-    if (totalCollections === 0) return null;
+    if (totalCollections === 0) {
+      return (
+        <div className="minimal-card p-5.5 rounded-xl flex flex-col gap-4 relative bg-surface border border-border">
+          <div className="absolute -right-12 -top-12 w-24 h-24 bg-primary/5 rounded-full blur-xl pointer-events-none" />
+
+          <div className="flex justify-between items-center relative z-10">
+            <span className="text-xs font-bold text-foreground flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary" />
+              Revenue Breakdown
+              <InfoTag text="Daily sales pool totals. Note: Token revenue represents physical token values received (tokens * conversion rate)." position="bottom" />
+            </span>
+            <span className="text-xs font-mono font-bold text-foreground bg-surface-header px-3 py-1 rounded-lg border border-border">
+              Total Revenue: <span className="text-primary ml-1">₹0.00</span>
+            </span>
+          </div>
+
+          <div className="py-8 flex flex-col items-center justify-center text-center relative z-10 gap-2">
+            <PresentationChart size={36} weight="thin" className="text-text-muted/40" />
+            <span className="text-xs font-bold text-foreground">No revenue logged for this period</span>
+            <p className="text-[11px] text-text-muted max-w-[280px]">Take your first order to see revenue breakdown</p>
+          </div>
+        </div>
+      );
+    }
     const cashPct = (cashCollection / totalCollections) * 100;
     const onlinePct = (onlineCollection / totalCollections) * 100;
     const tokenPct = (tokenCollection / totalCollections) * 100;
@@ -2224,7 +2287,7 @@ export default function OwnerDashboardPage() {
                 {/* Description */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs text-text-muted font-bold">Description</label>
-                  <textarea
+                      <textarea
                     placeholder="Ingredients, preparation details... (optional)"
                     value={itemDescription}
                     onChange={(e) => setItemDescription(e.target.value)}
@@ -2281,8 +2344,122 @@ export default function OwnerDashboardPage() {
                     </label>
                   </div>
                 </div>
+
+                {/* Customizations */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-text-muted font-bold">Customizations</label>
+                  <div className="flex flex-col gap-3 bg-surface-container/30 p-3.5 border border-border rounded-lg">
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-text-muted">
+                      <input
+                        type="checkbox"
+                        checked={itemCustomizable}
+                        onChange={(e) => setItemCustomizable(e.target.checked)}
+                        className="accent-primary cursor-pointer"
+                      />
+                      <span>Enable Add-ons & Spices</span>
+                    </label>
+
+                    {itemCustomizable && (
+                      <div className="mt-1 pt-3 border-t border-border/50 flex flex-col gap-3.5">
+                        {/* Spice levels */}
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Spice Options</span>
+                          {itemSpices.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-1">
+                              {itemSpices.map((spice, idx) => (
+                                <div key={idx} className="flex items-center gap-1 bg-surface-container border border-border px-2 py-0.5 rounded text-[10px] text-foreground font-semibold">
+                                  <span>{spice}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setItemSpices(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-text-muted hover:text-error cursor-pointer font-bold ml-1 text-[10px]"
+                                  >
+                                    &times;
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              placeholder="e.g. Mild, Spicy (+₹10)"
+                              value={newSpiceName}
+                              onChange={(e) => setNewSpiceName(e.target.value)}
+                              className="minimal-input px-2.5 py-1.5 text-[11px] flex-1 text-white placeholder-text-muted/30"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (newSpiceName.trim()) {
+                                  setItemSpices(prev => [...prev, newSpiceName.trim()]);
+                                  setNewSpiceName('');
+                                }
+                              }}
+                              className="minimal-btn-secondary h-7 px-2.5 min-h-0 text-[10px] font-bold rounded cursor-pointer"
+                            >
+                              <Plus size={10} weight="bold" className="mr-0.5" /> Add
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Add-ons */}
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Add-ons list</span>
+                          {itemAddons.length > 0 && (
+                            <div className="flex flex-col gap-1 mb-1 max-h-[100px] overflow-y-auto pr-1">
+                              {itemAddons.map((addon, idx) => (
+                                <div key={idx} className="flex justify-between items-center bg-surface-header border border-border px-2 py-1 rounded text-[10px] text-foreground font-semibold">
+                                  <span>{addon.name} <strong className="text-primary font-mono">(₹{addon.price})</strong></span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setItemAddons(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-text-muted hover:text-error cursor-pointer"
+                                  >
+                                    <Trash size={10} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              placeholder="e.g. Extra Cheese"
+                              value={newAddonName}
+                              onChange={(e) => setNewAddonName(e.target.value)}
+                              className="minimal-input px-2.5 py-1.5 text-[11px] flex-1 text-white placeholder-text-muted/30"
+                            />
+                            <input
+                              type="number"
+                              placeholder="Price"
+                              value={newAddonPrice}
+                              onChange={(e) => setNewAddonPrice(e.target.value)}
+                              className="minimal-input px-2 py-1.5 text-[11px] w-16 text-white placeholder-text-muted/30 font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (newAddonName.trim() && newAddonPrice) {
+                                  const p = parseFloat(newAddonPrice);
+                                  if (!isNaN(p) && p >= 0) {
+                                    setItemAddons(prev => [...prev, { name: newAddonName.trim(), price: p }]);
+                                    setNewAddonName('');
+                                    setNewAddonPrice('');
+                                  }
+                                }
+                              }}
+                              className="minimal-btn-secondary h-7 px-2.5 min-h-0 text-[10px] font-bold rounded cursor-pointer"
+                            >
+                              <Plus size={10} weight="bold" className="mr-0.5" /> Add
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              
               <div className="bg-surface-header/80 px-5 py-3.5 border-t border-border flex justify-end gap-2.5 shrink-0">
                 <button
                   type="button"
@@ -2617,6 +2794,121 @@ export default function OwnerDashboardPage() {
                       <Star size={14} weight="duotone" className="text-yellow-400" />
                       <span>Best Seller / Popular</span>
                     </label>
+                  </div>
+                </div>
+
+                {/* Customizations */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-text-muted font-bold">Customizations</label>
+                  <div className="flex flex-col gap-3 bg-surface-container/30 p-3.5 border border-border rounded-lg">
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-text-muted">
+                      <input
+                        type="checkbox"
+                        checked={editCustomizable}
+                        onChange={(e) => setEditCustomizable(e.target.checked)}
+                        className="accent-primary cursor-pointer"
+                      />
+                      <span>Enable Add-ons & Spices</span>
+                    </label>
+
+                    {editCustomizable && (
+                      <div className="mt-1 pt-3 border-t border-border/50 flex flex-col gap-3.5">
+                        {/* Spice levels */}
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Spice Options</span>
+                          {editSpices.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-1">
+                              {editSpices.map((spice, idx) => (
+                                <div key={idx} className="flex items-center gap-1 bg-surface-container border border-border px-2 py-0.5 rounded text-[10px] text-foreground font-semibold">
+                                  <span>{spice}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditSpices(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-text-muted hover:text-error cursor-pointer font-bold ml-1 text-[10px]"
+                                  >
+                                    &times;
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              placeholder="e.g. Mild, Spicy (+₹10)"
+                              value={editNewSpiceName}
+                              onChange={(e) => setEditNewSpiceName(e.target.value)}
+                              className="minimal-input px-2.5 py-1.5 text-[11px] flex-1 text-white placeholder-text-muted/30"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editNewSpiceName.trim()) {
+                                  setEditSpices(prev => [...prev, editNewSpiceName.trim()]);
+                                  setEditNewSpiceName('');
+                                }
+                              }}
+                              className="minimal-btn-secondary h-7 px-2.5 min-h-0 text-[10px] font-bold rounded cursor-pointer"
+                            >
+                              <Plus size={10} weight="bold" className="mr-0.5" /> Add
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Add-ons */}
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Add-ons list</span>
+                          {editAddons.length > 0 && (
+                            <div className="flex flex-col gap-1 mb-1 max-h-[100px] overflow-y-auto pr-1">
+                              {editAddons.map((addon, idx) => (
+                                <div key={idx} className="flex justify-between items-center bg-surface-header border border-border px-2 py-1 rounded text-[10px] text-foreground font-semibold">
+                                  <span>{addon.name} <strong className="text-primary font-mono">(₹{addon.price})</strong></span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditAddons(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-text-muted hover:text-error cursor-pointer"
+                                  >
+                                    <Trash size={10} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              placeholder="e.g. Extra Cheese"
+                              value={editNewAddonName}
+                              onChange={(e) => setEditNewAddonName(e.target.value)}
+                              className="minimal-input px-2.5 py-1.5 text-[11px] flex-1 text-white placeholder-text-muted/30"
+                            />
+                            <input
+                              type="number"
+                              placeholder="Price"
+                              value={editNewAddonPrice}
+                              onChange={(e) => setEditNewAddonPrice(e.target.value)}
+                              className="minimal-input px-2 py-1.5 text-[11px] w-16 text-white placeholder-text-muted/30 font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editNewAddonName.trim() && editNewAddonPrice) {
+                                  const p = parseFloat(editNewAddonPrice);
+                                  if (!isNaN(p) && p >= 0) {
+                                    setEditAddons(prev => [...prev, { name: editNewAddonName.trim(), price: p }]);
+                                    setEditNewAddonName('');
+                                    setEditNewAddonPrice('');
+                                  }
+                                }
+                              }}
+                              className="minimal-btn-secondary h-7 px-2.5 min-h-0 text-[10px] font-bold rounded cursor-pointer"
+                            >
+                              <Plus size={10} weight="bold" className="mr-0.5" /> Add
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

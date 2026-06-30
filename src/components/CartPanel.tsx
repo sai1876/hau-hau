@@ -176,13 +176,28 @@ export function CartPanel({ onClose }: CartPanelProps) {
           ) : (
             cartItems.map((item) => (
               <div 
-                key={item.menuItemId} 
+                key={item.customId || item.menuItemId} 
                 className="flex items-center justify-between bg-surface-container/30 p-3 border border-border rounded-lg hover:border-text-muted/30 transition-colors duration-200"
               >
                 <div className="flex flex-col pr-2 flex-1">
                   <span className="font-bold text-xs text-foreground leading-tight">
                     {item.name}
                   </span>
+                  {item.customization && (
+                    <span className="text-[10px] text-primary/80 font-bold mt-1 flex flex-col gap-0.5">
+                      <span>
+                        {[
+                          item.customization.spiceLevel,
+                          ...(item.customization.addons?.map(a => a.name) || [])
+                        ].filter(Boolean).join(', ')}
+                      </span>
+                      {item.customization.notes && (
+                        <span className="text-text-muted font-medium italic">
+                          "{item.customization.notes}"
+                        </span>
+                      )}
+                    </span>
+                  )}
                   <span className="text-[11px] text-text-muted font-mono mt-1">
                     ₹{item.price.toFixed(2)}
                   </span>
@@ -192,7 +207,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
                   {/* Steppers */}
                   <div className="flex items-center bg-surface-container border border-border rounded-md overflow-hidden h-8 shadow-xs">
                     <button 
-                      onClick={() => updateCartQuantity(item.menuItemId, -1)}
+                      onClick={() => updateCartQuantity(item.customId || item.menuItemId, -1)}
                       className="w-7 h-full flex items-center justify-center text-sm text-text-muted hover:text-foreground hover:bg-surface/40 transition-colors font-bold cursor-pointer"
                     >
                       -
@@ -201,7 +216,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
                       {item.quantity}
                     </span>
                     <button 
-                      onClick={() => updateCartQuantity(item.menuItemId, 1)}
+                      onClick={() => updateCartQuantity(item.customId || item.menuItemId, 1)}
                       className="w-7 h-full flex items-center justify-center text-sm text-text-muted hover:text-foreground hover:bg-surface/40 transition-colors font-bold cursor-pointer"
                     >
                       +
@@ -210,7 +225,7 @@ export function CartPanel({ onClose }: CartPanelProps) {
 
                   {/* Remove Trash */}
                   <button 
-                    onClick={() => removeFromCart(item.menuItemId)}
+                    onClick={() => removeFromCart(item.customId || item.menuItemId)}
                     className="text-text-muted/60 hover:text-error hover:bg-error/10 p-1.5 rounded-md border border-transparent hover:border-error/20 transition-all cursor-pointer"
                     title="Remove item"
                   >

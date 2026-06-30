@@ -85,7 +85,15 @@ const DEFAULT_MENU: MenuItem[] = [
     available: true,
     description: 'Crispy crunchy momos stuffed with spiced vegetables, coated in Kurkure crumbs',
     prepTime: '8-10 mins',
-    tags: ['veg', 'popular']
+    tags: ['veg', 'popular'],
+    customizable: true,
+    customizationOptions: {
+      spices: ['Mild', 'Medium', 'Spicy'],
+      addons: [
+        { name: 'Extra Dip', price: 10 },
+        { name: 'Cheese Filling', price: 20 }
+      ]
+    }
   },
   { 
     id: 'm2', 
@@ -105,7 +113,14 @@ const DEFAULT_MENU: MenuItem[] = [
     available: true,
     description: 'Bite-sized tender chicken pieces, marinated and deep fried to golden perfection',
     prepTime: '6-8 mins',
-    tags: ['popular']
+    tags: ['popular'],
+    customizable: true,
+    customizationOptions: {
+      spices: ['Regular', 'Peri-Peri (+₹10)'],
+      addons: [
+        { name: 'Extra Mayo', price: 10 }
+      ]
+    }
   },
   { 
     id: 'm4', 
@@ -155,7 +170,15 @@ const DEFAULT_MENU: MenuItem[] = [
     available: true,
     description: 'Indulgent thick shake loaded with crushed Oreo cookies and KitKat bars',
     prepTime: '4-5 mins',
-    tags: ['popular']
+    tags: ['popular'],
+    customizable: true,
+    customizationOptions: {
+      addons: [
+        { name: 'Extra Ice Cream', price: 15 },
+        { name: 'Choco Chips', price: 10 },
+        { name: 'Extra Oreo', price: 15 }
+      ]
+    }
   }
 ];
 
@@ -218,6 +241,22 @@ const DEFAULT_STAFF: StaffAccount[] = [
     outletId: DEFAULT_OUTLET_ID
   }
 ];
+
+function mergeMenuWithDefaults(items: MenuItem[]): MenuItem[] {
+  return items.map(item => {
+    const defaultItem = DEFAULT_MENU.find(d => d.id === item.id);
+    if (defaultItem) {
+      return {
+        ...item,
+        customizable: defaultItem.customizable ?? item.customizable,
+        customizationOptions: defaultItem.customizationOptions ?? item.customizationOptions,
+        tags: defaultItem.tags ?? item.tags,
+        prepTime: defaultItem.prepTime ?? item.prepTime,
+      };
+    }
+    return item;
+  });
+}
 
 export const db = {
   isFirebaseConfigured,
@@ -325,7 +364,8 @@ export const db = {
     this.init();
     const load = () => {
       const menu = localStorage.getItem(MENU_KEY);
-      callback(menu ? JSON.parse(menu) : DEFAULT_MENU);
+      const parsed = menu ? JSON.parse(menu) : DEFAULT_MENU;
+      callback(mergeMenuWithDefaults(parsed));
     };
     load();
     window.addEventListener('storage', load);
@@ -389,13 +429,13 @@ export const db = {
           DEFAULT_MENU.forEach((item) => {
             setDoc(doc(firestore, 'menu', item.id), item).catch(() => {});
           });
-          callback(DEFAULT_MENU);
+          callback(mergeMenuWithDefaults(DEFAULT_MENU));
         } else {
           const menuItems: MenuItem[] = [];
           snapshot.forEach((doc) => {
             menuItems.push(doc.data() as MenuItem);
           });
-          callback(menuItems);
+          callback(mergeMenuWithDefaults(menuItems));
         }
       }, (error) => {
         console.warn("Firestore menu subscription error:", error);

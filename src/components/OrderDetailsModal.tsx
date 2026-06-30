@@ -39,67 +39,112 @@ export function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
 
         {/* Content */}
         <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-6 relative z-10">
-          {/* Metadata Grid */}
-          <div className="grid grid-cols-2 gap-4 bg-surface-container/30 p-4 border border-border rounded-lg">
-            <div className="flex flex-col">
-              <span className="text-xs text-text-muted font-semibold">Table</span>
-              <span className="text-sm font-bold mt-1 font-mono text-primary">{order.tableNumber}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-text-muted font-semibold">Staff</span>
-              <span className="text-xs font-bold text-foreground mt-1">{order.staffName}</span>
-            </div>
-            <div className="flex flex-col col-span-2 sm:col-span-1">
-              <span className="text-xs text-text-muted font-semibold">Payment</span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs font-bold text-foreground capitalize font-mono">{order.paymentMode}</span>
-                <StatusBadge status={order.paymentStatus} />
+          {/* Metadata & Token Info */}
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4 bg-surface-container/30 p-4.5 border border-border rounded-xl">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Table</span>
+                <span className="text-sm font-bold mt-1.5 font-mono text-primary">{order.tableNumber}</span>
               </div>
-              {order.paymentMode === 'tokens' && (
-                <div className="mt-2.5 p-2.5 bg-blue-500/5 border border-blue-500/20 rounded-md text-[10px] text-blue-400 font-mono flex flex-col gap-1 leading-snug">
-                  {order.studentName && <span>Student: <strong className="text-foreground font-semibold">{order.studentName}</strong></span>}
-                  {order.tokenCardNo && <span>Card: <strong className="text-foreground font-semibold">#{order.tokenCardNo}</strong></span>}
-                  <span>Deducted: <strong className="text-foreground font-semibold">{order.tokensDeducted !== undefined ? order.tokensDeducted : Math.ceil(order.total / 30)} tokens</strong></span>
-                  {order.creditApplied !== undefined && order.creditApplied > 0 && (
-                    <span>Credit Used: <strong className="text-foreground font-semibold">₹{order.creditApplied.toFixed(2)}</strong></span>
-                  )}
-                  {order.creditReturned !== undefined && order.creditReturned > 0 && (
-                    <span>Credit Saved: <strong className="text-foreground font-semibold">₹{order.creditReturned.toFixed(2)}</strong></span>
-                  )}
+              <div className="flex flex-col">
+                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Staff</span>
+                <span className="text-sm font-semibold text-foreground mt-1.5">{order.staffName}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Payment</span>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="text-sm font-bold text-foreground capitalize font-mono leading-none">{order.paymentMode}</span>
+                  <StatusBadge status={order.paymentStatus} />
                 </div>
-              )}
-            </div>
-            <div className="flex flex-col col-span-2 sm:col-span-1">
-              <span className="text-xs text-text-muted font-semibold">Status</span>
-              <div className="mt-1">
-                <StatusBadge status={order.orderStatus} />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Order Status</span>
+                <div className="mt-1.5">
+                  <StatusBadge status={order.orderStatus} />
+                </div>
               </div>
             </div>
+
+            {order.paymentMode === 'tokens' && (
+              <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl text-xs text-blue-400 font-mono flex flex-col gap-2.5 leading-snug shadow-sm">
+                <div className="flex justify-between border-b border-blue-500/10 pb-2 mb-1">
+                  <span className="text-[10px] text-blue-400/70 font-bold uppercase tracking-wider">Token Details</span>
+                  <span className="text-[10px] font-bold text-blue-400 font-mono">Deduction Info</span>
+                </div>
+                {order.studentName && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-400/80">Student Name:</span>
+                    <strong className="text-foreground font-semibold">{order.studentName}</strong>
+                  </div>
+                )}
+                {order.tokenCardNo && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-400/80">Card Number:</span>
+                    <strong className="text-foreground font-semibold">#{order.tokenCardNo}</strong>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-blue-400/80">Tokens Deducted:</span>
+                  <strong className="text-foreground font-semibold">
+                    {order.tokensDeducted !== undefined ? order.tokensDeducted : Math.ceil(order.total / 30)} tokens
+                  </strong>
+                </div>
+                {order.creditApplied !== undefined && order.creditApplied > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-400/80">Credit Used:</span>
+                    <strong className="text-foreground font-semibold">₹{order.creditApplied.toFixed(2)}</strong>
+                  </div>
+                )}
+                {order.creditReturned !== undefined && order.creditReturned > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-400/80">Credit Saved:</span>
+                    <strong className="text-foreground font-semibold">₹{order.creditReturned.toFixed(2)}</strong>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Itemized list */}
-          <div className="flex flex-col gap-2">
-            <span className="text-xs text-text-muted font-semibold">Items Ordered</span>
-            <div className="border border-border rounded-lg overflow-hidden flex flex-col bg-surface-container/20">
-              <div className="max-h-[180px] overflow-y-auto divide-y divide-border">
-                {order.items.map((item) => (
-                  <div key={item.menuItemId} className="flex justify-between items-center p-3.5">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-foreground">{item.name}</span>
+          <div className="flex flex-col gap-2.5">
+            <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">Items Ordered</h4>
+            <div className="border border-border rounded-xl overflow-hidden flex flex-col bg-surface-container/10">
+              <div className="divide-y divide-border">
+                {order.items.map((item, index) => (
+                  <div key={item.customId || `${item.menuItemId}-${index}`} className="flex justify-between items-start p-4 hover:bg-surface-container/5 transition-colors duration-200">
+                    <div className="flex flex-col gap-1 max-w-[70%]">
+                      <span className="text-sm font-bold text-foreground leading-tight">{item.name}</span>
+                      {item.customization && (
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <span className="text-[10px] text-primary/90 font-bold">
+                            {[
+                              item.customization.spiceLevel,
+                              ...(item.customization.addons?.map(a => a.name) || [])
+                            ].filter(Boolean).join(', ')}
+                          </span>
+                          {item.customization.notes && (
+                            <span className="text-[10px] text-text-muted italic font-medium">
+                              "{item.customization.notes}"
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <span className="text-[10px] text-text-muted font-mono mt-0.5">₹{item.price.toFixed(2)} each</span>
                     </div>
-                    <div className="flex items-center gap-6">
-                      <span className="text-[10px] text-text-muted font-semibold">Qty: <strong className="text-foreground font-bold">{item.quantity}</strong></span>
-                      <span className="text-xs font-bold text-foreground font-mono">₹{(item.price * item.quantity).toFixed(2)}</span>
+                    <div className="flex items-center gap-6 self-center">
+                      <span className="text-xs text-text-muted font-semibold">
+                        Qty: <strong className="text-foreground font-bold">{item.quantity}</strong>
+                      </span>
+                      <span className="text-sm font-bold text-foreground font-mono">₹{(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                   </div>
                 ))}
               </div>
               
               {/* Total Summary */}
-              <div className="flex justify-between items-center p-4 bg-surface-header font-bold border-t border-border">
-                <span className="text-xs text-text-muted font-bold">Grand Total</span>
-                <span className="text-base text-primary font-bold font-mono">₹{order.total.toFixed(2)}</span>
+              <div className="flex justify-between items-center px-4.5 py-4 bg-surface-header/80 font-bold border-t border-border">
+                <span className="text-xs text-text-muted uppercase tracking-wider">Grand Total</span>
+                <span className="text-lg text-primary font-bold font-mono">₹{order.total.toFixed(2)}</span>
               </div>
             </div>
             {settings?.receiptFooter && (
@@ -111,14 +156,14 @@ export function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
 
           {/* Timeline */}
           <div className="flex flex-col gap-3">
-            <span className="text-xs text-text-muted font-semibold">Order Tracker</span>
-            <div className="flex flex-col gap-4 pl-4 border-l border-border py-1.5 ml-2.5">
+            <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">Order Timeline</h4>
+            <div className="flex flex-col gap-5 pl-4 border-l-2 border-border/85 py-1 ml-2">
               
-              {/* Submitted step */}
+              {/* Placed step */}
               <div className="flex flex-col relative">
-                <span className="absolute left-[-21px] top-1 w-2.5 h-2.5 rounded-full bg-primary animate-pulse-ring" />
-                <span className="text-xs font-bold text-foreground">Order Placed & Logged</span>
-                <span className="text-[10px] text-text-muted font-mono mt-0.5">
+                <span className="absolute left-[-21px] top-1 w-2.5 h-2.5 rounded-full bg-primary ring-4 ring-primary/20" />
+                <span className="text-xs font-bold text-foreground">Order Placed</span>
+                <span className="text-[10px] text-text-muted font-mono mt-0.5 font-medium">
                   {new Date(order.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                 </span>
               </div>
@@ -126,23 +171,23 @@ export function OrderDetailsModal({ order, onClose }: OrderDetailsModalProps) {
               {/* Fulfillment step */}
               {order.orderStatus === 'completed' && order.completedAt ? (
                 <div className="flex flex-col relative">
-                  <span className="absolute left-[-21px] top-1 w-2.5 h-2.5 rounded-full bg-[#71d384] animate-pulse-ring-emerald" />
-                  <span className="text-xs font-bold text-[#71d384]">Order Completed & Cleared</span>
-                  <span className="text-[10px] text-text-muted font-mono mt-0.5">
+                  <span className="absolute left-[-21px] top-1 w-2.5 h-2.5 rounded-full bg-success ring-4 ring-success/20" />
+                  <span className="text-xs font-bold text-success">Order Completed & Cleared</span>
+                  <span className="text-[10px] text-text-muted font-mono mt-0.5 font-medium">
                     {new Date(order.completedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                   </span>
                 </div>
               ) : order.orderStatus === 'cancelled' ? (
                 <div className="flex flex-col relative">
-                  <span className="absolute left-[-21px] top-1 w-2.5 h-2.5 rounded-full bg-error" />
-                  <span className="text-xs font-bold text-error">Order Cancelled & Voided</span>
-                  <span className="text-[10px] text-text-muted font-mono mt-0.5">Fulfillment interrupted</span>
+                  <span className="absolute left-[-21px] top-1 w-2.5 h-2.5 rounded-full bg-error ring-4 ring-error/20" />
+                  <span className="text-xs font-bold text-error">Order Cancelled</span>
+                  <span className="text-[10px] text-text-muted font-mono mt-0.5 font-medium">Fulfillment interrupted</span>
                 </div>
               ) : (
                 <div className="flex flex-col relative">
                   <span className="absolute left-[-21px] top-1 w-2.5 h-2.5 rounded-full bg-border" />
-                  <span className="text-xs font-bold text-text-muted">Order Queue / In Prep</span>
-                  <span className="text-[10px] text-text-muted/60 font-mono mt-0.5 font-semibold">Awaiting operator verification</span>
+                  <span className="text-xs font-bold text-text-muted">In Preparation</span>
+                  <span className="text-[10px] text-text-muted/60 font-mono mt-0.5 font-semibold">Awaiting operator fulfillment</span>
                 </div>
               )}
 

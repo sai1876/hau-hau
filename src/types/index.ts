@@ -19,6 +19,11 @@ export interface MenuItem {
   prepTime?: string;
   tags?: ('spicy' | 'veg' | 'popular' | 'new')[];
   outletId?: string;
+  customizable?: boolean;
+  customizationOptions?: {
+    spices?: string[];
+    addons?: { name: string; price: number }[];
+  };
 }
 
 export interface CartItem {
@@ -26,6 +31,12 @@ export interface CartItem {
   name: string;
   price: number;
   quantity: number;
+  customId?: string;
+  customization?: {
+    spiceLevel?: string;
+    addons?: { name: string; price: number }[];
+    notes?: string;
+  };
 }
 
 export interface Order {

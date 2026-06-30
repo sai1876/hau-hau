@@ -36,9 +36,9 @@ interface AppContextType {
   
   // Staff actions
   selectActiveTable: (table: string | null) => void;
-  addToCart: (item: MenuItem) => void;
-  updateCartQuantity: (itemId: string, change: number) => void;
-  removeFromCart: (itemId: string) => void;
+  addToCart: (item: MenuItem, customization?: CartItem['customization']) => void;
+  updateCartQuantity: (cartItemId: string, change: number) => void;
+  removeFromCart: (cartItemId: string) => void;
   clearTableCart: (table: string) => void;
   confirmOrder: (paymentMode: 'cash' | 'online' | 'tokens', tokenCardNo?: string) => Promise<boolean>;
   
@@ -624,23 +624,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActiveTable(table);
   };
 
-  const addToCart = (item: MenuItem) => {
+  const getCartItemKey = (menuItemId: string, customization?: CartItem['customization']) => {
+    if (!customization) return menuItemId;
+    const addonsStr = customization.addons?.map(a => a.name).sort().join(',') || '';
+    const spiceStr = customization.spiceLevel || '';
+    const notesStr = customization.notes || '';
+    return `${menuItemId}-${spiceStr}-${addonsStr}-${notesStr}`;
+  };
+
+  const addToCart = (item: MenuItem, customization?: CartItem['customization']) => {
     if (!activeTable) {
       addToast('Select a table first before adding food items!', 'warning');
       return;
     }
 
+    const getSpicePrice = (spice: string | undefined): number => {
+      if (!spice) return 0;
+      const match = spice.match(/\+\s*₹?\s*(\d+)/);
+      return match ? parseInt(match[1], 10) : 0;
+    };
+
+    const spicePrice = getSpicePrice(customization?.spiceLevel);
+    const calculatedPrice = item.price + (customization?.addons?.reduce((sum, a) => sum + a.price, 0) || 0) + spicePrice;
+    const customId = getCartItemKey(item.id, customization);
+
     setTableCarts(prev => {
       const currentCart = prev[activeTable] || [];
-      const existingItem = currentCart.find(i => i.menuItemId === item.id);
+      const existingItem = currentCart.find(i => (i.customId || i.menuItemId) === customId);
       
       let updatedCart;
       if (existingItem) {
         updatedCart = currentCart.map(i => 
-          i.menuItemId === item.id ? { ...i, quantity: i.quantity + 1 } : i
+          (i.customId || i.menuItemId) === customId ? { ...i, quantity: i.quantity + 1 } : i
         );
       } else {
-        updatedCart = [...currentCart, { menuItemId: item.id, name: item.name, price: item.price, quantity: 1 }];
+        updatedCart = [...currentCart, { 
+          menuItemId: item.id, 
+          customId,
+          name: item.name, 
+          price: calculatedPrice, 
+          quantity: 1,
+          customization
+        }];
       }
 
       return {
@@ -652,13 +677,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addToast(`Added ${item.name} to ${activeTable === 'Self' ? 'Self Service' : `Table ${activeTable}`}`, 'success');
   };
 
-  const updateCartQuantity = (itemId: string, change: number) => {
+  const updateCartQuantity = (cartItemId: string, change: number) => {
     if (!activeTable) return;
 
     setTableCarts(prev => {
       const currentCart = prev[activeTable] || [];
       const updatedCart = currentCart.map(i => {
-        if (i.menuItemId === itemId) {
+        if ((i.customId || i.menuItemId) === cartItemId) {
           const newQty = i.quantity + change;
           return newQty > 0 ? { ...i, quantity: newQty } : i;
         }
@@ -672,12 +697,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const removeFromCart = (itemId: string) => {
+  const removeFromCart = (cartItemId: string) => {
     if (!activeTable) return;
 
     setTableCarts(prev => {
       const currentCart = prev[activeTable] || [];
-      const updatedCart = currentCart.filter(i => i.menuItemId !== itemId);
+      const updatedCart = currentCart.filter(i => (i.customId || i.menuItemId) !== cartItemId);
       return {
         ...prev,
         [activeTable]: updatedCart

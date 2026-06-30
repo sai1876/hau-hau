@@ -9,7 +9,8 @@ import CartPanel from '@/components/CartPanel';
 import StatusBadge from '@/components/StatusBadge';
 import ProfileSection from '@/components/ProfileSection';
 import TokenAccountForm from '@/components/TokenAccountForm';
-import { TokenAccount } from '@/types';
+import { TokenAccount, MenuItem } from '@/types';
+import CustomizerModal from '@/components/CustomizerModal';
 import { TokenIcon } from '@/components/TokenIcon';
 import { ForkKnife, CreditCard, ClipboardText, MagnifyingGlass, GearSix, BookOpen, Sparkle, X, Clock } from '@phosphor-icons/react';
 import { Pagination } from '@/components/Pagination';
@@ -25,6 +26,7 @@ export default function StaffDashboardPage() {
     orders, 
     activeTable, 
     tableCarts,
+    addToCart,
     tokens,
     tokenTransactions,
     staffList,
@@ -53,6 +55,7 @@ export default function StaffDashboardPage() {
   const [isOptimizingQueue, setIsOptimizingQueue] = useState(false);
   const [queueOptimization, setQueueOptimization] = useState<any>(null);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -418,7 +421,7 @@ export default function StaffDashboardPage() {
                 <div className="flex-1 overflow-y-auto pr-1 pb-24 lg:pb-12">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredMenu.map((item) => (
-                      <MenuItemCard key={item.id} item={item} />
+                      <MenuItemCard key={item.id} item={item} onCustomize={setCustomizingItem} />
                     ))}
                   </div>
                 </div>
@@ -983,6 +986,18 @@ export default function StaffDashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Customizer Modal */}
+      {customizingItem && (
+        <CustomizerModal
+          item={customizingItem}
+          onClose={() => setCustomizingItem(null)}
+          onConfirm={(customization) => {
+            addToCart(customizingItem, customization);
+            setCustomizingItem(null);
+          }}
+        />
       )}
 
     </div>
