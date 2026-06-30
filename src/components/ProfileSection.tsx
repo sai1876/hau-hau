@@ -115,7 +115,7 @@ export function ProfileSection() {
 
             <div className="mt-3 flex gap-2">
               <span className="text-[10px] bg-surface-container text-text-muted px-2 py-0.5 border border-border rounded-md font-bold">
-                {currentUser.role === 'owner' ? 'System Administrator' : 'POS Floor Staff'}
+                {currentUser.role === 'owner' ? 'System Administrator' : 'POS Staff'}
               </span>
               <StatusBadge status={dbUser?.status || 'active'} />
             </div>
@@ -214,7 +214,7 @@ export function ProfileSection() {
         {/* Statistics Panels */}
         <div className="flex flex-col gap-3">
           <h3 className="text-xs text-foreground font-bold">
-            {currentUser.role === 'owner' ? 'Business Operations Intelligence' : 'Your Floor Performance'}
+            {currentUser.role === 'owner' ? 'Business Operations Intelligence' : 'Your Performance'}
           </h3>
           
           {currentUser.role === 'owner' ? (

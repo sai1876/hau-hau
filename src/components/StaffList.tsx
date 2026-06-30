@@ -41,10 +41,10 @@ export function StaffList() {
             <thead>
               <tr className="border-b border-border bg-surface-header/40 text-text-muted">
                 <th className="p-3.5 pl-5 text-xs font-semibold">Staff</th>
-                <th className="p-3.5 text-xs font-semibold">Contact</th>
-                <th className="p-3.5 text-xs font-semibold">Username</th>
-                <th className="p-3.5 text-xs font-semibold">Role</th>
-                <th className="p-3.5 text-xs font-semibold">Status</th>
+                <th className="py-3.5 px-2 text-xs font-semibold">Contact</th>
+                <th className="py-3.5 px-2 text-xs font-semibold">Username</th>
+                <th className="py-3.5 px-2 text-xs font-semibold">Role</th>
+                <th className="py-3.5 px-2 text-xs font-semibold">Status</th>
                 <th className="p-3.5 pr-5 text-xs font-semibold text-right">Actions</th>
               </tr>
             </thead>
@@ -60,17 +60,17 @@ export function StaffList() {
                       <div className="flex flex-col">
                         <span className="font-bold text-foreground text-xs">{staff.name}</span>
                         <span className="text-[9px] bg-surface-container text-text-muted px-1.5 py-0.2 rounded-sm border border-border font-bold mt-1 w-max capitalize">
-                          {staff.role === 'owner' ? 'Owner' : 'Floor Staff'}
+                          {staff.role === 'owner' ? 'Owner' : 'Staff'}
                         </span>
                       </div>
                     </div>
                   </td>
-                  <td className="p-3.5 text-text-muted font-mono">{staff.emailOrPhone}</td>
-                  <td className="p-3.5 text-foreground font-mono font-semibold">@{staff.username}</td>
-                  <td className="p-3.5 text-foreground font-semibold capitalize">
-                    {staff.role === 'owner' ? 'Owner' : 'Floor Staff'}
+                  <td className="py-3.5 px-2 text-text-muted font-mono max-w-[150px] truncate" title={staff.emailOrPhone}>{staff.emailOrPhone}</td>
+                  <td className="py-3.5 px-2 text-foreground font-mono font-semibold max-w-[110px] truncate" title={`@${staff.username}`}>@{staff.username}</td>
+                  <td className="py-3.5 px-2 text-foreground font-semibold capitalize">
+                    {staff.role === 'owner' ? 'Owner' : 'Staff'}
                   </td>
-                  <td className="p-3.5">
+                  <td className="py-3.5 px-2">
                     <div className="flex items-center gap-2">
                       <span className={`w-1.5 h-1.5 rounded-full ${staff.status === 'active' ? 'bg-[#71d384] animate-pulse-ring-emerald' : 'bg-error'} inline-block`} />
                       <StatusBadge status={staff.status} />

@@ -49,7 +49,7 @@ export function DocsWorkspace() {
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
               <div className="bg-surface-container/30 border border-border/50 p-4 rounded-lg flex flex-col gap-2">
-                <span className="text-xs font-bold text-foreground">For Floor Staff</span>
+                <span className="text-xs font-bold text-foreground">For Staff</span>
                 <span className="text-[11px] text-text-muted leading-relaxed">
                   Use the **POS Terminal** to choose tables, add menu items to the cart, scan student NFC cards, and deduct whole physical tokens. You can also recharge passes and view shift history.
                 </span>

@@ -273,7 +273,7 @@ export default function StaffDashboardPage() {
                 {currentUser.name}
               </span>
               <span className="text-[10px] text-text-muted font-bold mt-0.5 flex items-center gap-1">
-                Floor Staff <GearSix size={12} weight="duotone" className="inline text-text-muted/60 ml-0.5" />
+                Staff <GearSix size={12} weight="duotone" className="inline text-text-muted/60 ml-0.5" />
               </span>
             </button>
             <button
