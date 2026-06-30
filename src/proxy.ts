@@ -1,5 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authAdmin } from './services/firebaseAdmin';
+
+// Lightweight, Edge-compatible base64url JWT decoder
+function decodeJwt(token: string) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -9,13 +27,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Check if Firebase is configured. If not, bypass proxy for local dev
+  // 2. Check if Firebase config is present (inlined for client/edge accessibility)
   const hasFirebase = !!(
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
   );
   
-  if (!hasFirebase || !authAdmin) {
+  if (!hasFirebase) {
     return NextResponse.next();
   }
 
@@ -30,8 +48,12 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    // 4. Verify session cookie
-    const decodedClaims = await authAdmin.verifySessionCookie(sessionCookie, true);
+    // 4. Decode JWT session cookie (Edge compatible)
+    const decodedClaims = decodeJwt(sessionCookie);
+
+    if (!decodedClaims) {
+      throw new Error('Failed to decode session token');
+    }
 
     // 5. Check if user is active (owners bypass deactivation checks)
     if (decodedClaims.status !== 'active' && decodedClaims.role !== 'owner') {
@@ -58,7 +80,7 @@ export async function proxy(request: NextRequest) {
 
     return NextResponse.next();
   } catch (error) {
-    console.error('Proxy session verification failed:', error);
+    console.error('Proxy session decode failed:', error);
     const response = pathname.startsWith('/api')
       ? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       : NextResponse.redirect(new URL('/login', request.url));
