@@ -113,6 +113,11 @@ export default function OwnerDashboardPage() {
     }
   }, [settings]);
 
+  // Reset audit page on filter changes
+  useEffect(() => {
+    setAuditPage(1);
+  }, [auditQuery, auditActionFilter]);
+
   // Date filtering state for day-wise reporting
   const [dateFilterType, setDateFilterType] = useState<'today' | 'yesterday' | 'last7days' | 'custom' | 'all'>('today');
   const [customDate, setCustomDate] = useState<string>(() => new Date().toLocaleDateString('en-CA'));
@@ -153,8 +158,10 @@ export default function OwnerDashboardPage() {
   // Pagination state
   const ORDERS_PER_PAGE = 10;
   const MENU_PER_PAGE   = 10;
+  const AUDIT_LOGS_PER_PAGE = 10;
   const [ordersPage, setOrdersPage] = useState(1);
   const [menuPage,   setMenuPage]   = useState(1);
+  const [auditPage,  setAuditPage]  = useState(1);
 
   // Form state for creating menu item
   const [itemName, setItemName] = useState('');
@@ -1732,6 +1739,10 @@ export default function OwnerDashboardPage() {
               return actionMatch && searchMatch;
             });
 
+            const auditPageCount = Math.max(1, Math.ceil(filteredLogs.length / AUDIT_LOGS_PER_PAGE));
+            const safeAuditPage  = Math.min(auditPage, auditPageCount);
+            const pagedAuditLogs = filteredLogs.slice((safeAuditPage - 1) * AUDIT_LOGS_PER_PAGE, safeAuditPage * AUDIT_LOGS_PER_PAGE);
+
             return (
               <div className="flex flex-col gap-6 animate-slide-in">
                 {/* Search & Filter Header */}
@@ -1802,7 +1813,7 @@ export default function OwnerDashboardPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                          {filteredLogs.map(log => {
+                          {pagedAuditLogs.map(log => {
                             const getActionDisplay = (action: string) => {
                               const mapping: Record<string, string> = {
                                 staffCreated: 'Staff Registered',
@@ -1991,6 +2002,14 @@ export default function OwnerDashboardPage() {
                       </table>
                     )}
                   </div>
+                  <Pagination
+                    currentPage={safeAuditPage}
+                    totalPages={auditPageCount}
+                    onPageChange={setAuditPage}
+                    totalItems={filteredLogs.length}
+                    itemsPerPage={AUDIT_LOGS_PER_PAGE}
+                    label="events"
+                  />
                 </div>
               </div>
             );

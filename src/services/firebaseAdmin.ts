@@ -23,7 +23,8 @@ if (!apps.length) {
       // Initialize with Application Default Credentials in production
       app = initializeApp();
     } catch (e) {
-      throw new Error("Firebase Admin SDK failed to initialize. Missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.");
+      console.warn("Firebase Admin SDK failed to initialize in production. Missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.", e);
+      app = null;
     }
   } else {
     console.warn("Firebase Admin SDK running in development mode without server credentials. authAdmin and dbAdmin will be disabled.");

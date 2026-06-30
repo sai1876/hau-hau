@@ -11,7 +11,8 @@ import {
   onSnapshot, 
   query, 
   orderBy,
-  runTransaction
+  runTransaction,
+  limit
 } from 'firebase/firestore';
 import { generateMockData } from './mockGenerator.mjs';
 
@@ -36,7 +37,8 @@ export const isFirebaseConfigured = () => {
       process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== 'undefined'
     );
     if (!isConfigured) {
-      throw new Error("Missing required Firebase environment variables in production. Failing fast.");
+      console.error("Missing required Firebase environment variables in production. Falling back to LocalStorage.");
+      return false;
     }
     return true;
   }
@@ -51,8 +53,12 @@ export const isFirebaseConfigured = () => {
 
 export const markFirebaseBlocked = () => {
   if (process.env.NODE_ENV === 'production') {
-    console.error("Firebase/Firestore was blocked or failed to load. LocalStorage fallback is disabled in production.");
-    throw new Error("Firestore connection failed in production.");
+    console.error("Firebase/Firestore was blocked or failed to load. Falling back to LocalStorage.");
+    firebaseBlocked = true;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('firebase-fallback'));
+    }
+    return;
   }
   if (!firebaseBlocked) {
     console.warn("Firebase/Firestore was blocked or failed to load. Falling back to LocalStorage mode.");
@@ -557,7 +563,7 @@ export const db = {
   subscribeTokenTransactions(callback: (txs: TokenTransaction[]) => void): () => void {
     if (isFirebaseConfigured()) {
       const txsCol = collection(firestore, 'token_transactions');
-      const txsQuery = query(txsCol, orderBy('createdAt', 'desc'));
+      const txsQuery = query(txsCol, orderBy('createdAt', 'desc'), limit(500));
       let isUnsubscribed = false;
       let localUnsub = () => {};
       const firestoreUnsub = onSnapshot(txsQuery, (snapshot) => {
@@ -1097,7 +1103,7 @@ export const db = {
   subscribeAuditLogs(callback: (logs: AuditLog[]) => void): () => void {
     if (isFirebaseConfigured()) {
       const logsCol = collection(firestore, 'audit_logs');
-      const q = query(logsCol, orderBy('timestamp', 'desc'));
+      const q = query(logsCol, orderBy('timestamp', 'desc'), limit(150));
       let isUnsubscribed = false;
       let localUnsub = () => {};
       const firestoreUnsub = onSnapshot(q, (snapshot) => {
